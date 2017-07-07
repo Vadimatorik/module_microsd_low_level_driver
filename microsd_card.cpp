@@ -58,14 +58,13 @@ void microsd_spi::out_command ( uint8_t command, uint32_t arg ) const {
     buf[5] = this->crc7( buf, 5 );
 
 	// Выдаем комманду.
-        this->spi->tx( buf, 6, 10 );// CMD (сама комманда) + аргумент. 0x40 должно быть заранее прибавлено + CRC.
+    this->spi->tx( buf, 6, 10 );// CMD (сама комманда) + аргумент. 0x40 должно быть заранее прибавлено + CRC.
 }
 
 // Ожидание R1 ответа.
 EC_SD_RESULT microsd_spi::read_r1 ( uint8_t& r1 ) const {	// Передаем FD SPI и указатель на переменную, в которую поместим R0 (если он придет).
     for (uint32_t l1=0; l1<10; l1++) {                      // Отправляем 10 0xFF. Если ничего не придет - ждем 1 мс и снова. Так 10 раз.
-        r1 = 0;                                             // Отправляем 0xFF.
-            this->spi->rx( &r1, 1, 10, 0xFF );
+        this->spi->rx( &r1, 1, 10, 0xFF );
         if ((r1 & (1<<7)) == 0)                             // Если пришло не 0xFF, то наш r1 пришел!
             return EC_SD_RESULT::OK;                        // Возвращаем успешное чтение.
     }
@@ -130,7 +129,7 @@ void microsd_spi::reset ( void ) const {
     this->cfg->cs->set();								// Переводим CS в 1 (для перевода в SPI режим).
 	uint8_t buffer[20];
 	memset(buffer, 0xFF, sizeof(buffer));
-        this->spi->tx( buffer, 20, 10 );
+    this->spi->tx( buffer, 20, 10 );
     this->cfg->cs->reset();									// Включаем карту.
 }
 
