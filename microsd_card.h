@@ -81,7 +81,6 @@ enum class MICRO_SD_ANSWER_TYPE {
 
 
 struct microsd_spi_cfg_t {
-    const spi_base* const spi;          // Используемый SPI.
     const pin*      const cs;            // Вывод CS, подключенный к microsd.
     uint32_t        init_spi_baudrate;    // Скорость во время инициализации.
     uint32_t        spi_baudrate_job;    // Скорость во время работы.
@@ -97,6 +96,7 @@ struct microsd_spi_cfg_t {
 class microsd_spi {
 public:
     constexpr microsd_spi( const microsd_spi_cfg_t* const cfg ) : cfg(cfg) {}
+    void    reinit          ( const spi_base* spi_obj ) const;
 
     // Считать сектор: структура карты, указатель на первый байт, куда будут помещены данные.
     // Адрес внутри microsd. В зависимости от карты: либо первого байта, откуда считать (выравнивание по 512 байт), либо адрес
@@ -129,7 +129,7 @@ private:
     const microsd_spi_cfg_t* const cfg;
     mutable MICRO_SD_TYPE             type_microsd = MICRO_SD_TYPE::ERROR;           // Тип microSD.
 
-
+    mutable const spi_base* spi = nullptr;
     mutable USER_OS_STATIC_MUTEX_BUFFER     mutex_buf = USER_OS_STATIC_MUTEX_BUFFER_INIT_VALUE;
     mutable USER_OS_STATIC_MUTEX            mutex = NULL;
 };
