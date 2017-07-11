@@ -84,7 +84,7 @@ struct microsd_spi_cfg_t {
     const pin*        const cs;             // Вывод CS, подключенный к microsd.
           uint32_t          init_spi_baudrate;    // Скорость во время инициализации.
           uint32_t          spi_baudrate_job;     // Скорость во время работы.
-          spi_base**  const p_spi;
+          spi_base*   const p_spi;
     /*
 #ifdef MICRO_SD_CARD_UART_DEBUG_LOG_OUT
     int                *uart_fd;            // Если включен режим вывода log-а по UART.

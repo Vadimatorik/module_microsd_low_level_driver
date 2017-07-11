@@ -33,7 +33,7 @@ uint8_t microsd_spi::crc7 ( uint8_t *d, uint32_t l ) const {
 EC_SD_RESULT microsd_spi::wait_byte_by_spi ( uint32_t number_repetitions, uint8_t state ) const {
 	uint8_t buf;
     for ( uint32_t loop=0; loop < number_repetitions; loop++ ) {	// Проходимся time_ms раз (с задержкой в 1 мс после каждого неудачного).
-            ( *this->cfg->p_spi )->rx( &buf, 1, 10, 0xFF);                     // Отправлять нужно обязательно 0xFF.
+            this->cfg->p_spi ->rx( &buf, 1, 10, 0xFF);                     // Отправлять нужно обязательно 0xFF.
         if ( buf == state ) return EC_SD_RESULT::OK;                    // Если пришел нужный байт - выходим.
     };
     return EC_SD_RESULT::ERROR;                                     // Если за number_repetitions нужный уровень не пришел - выходим.
@@ -43,7 +43,7 @@ EC_SD_RESULT microsd_spi::wait_byte_by_spi ( uint32_t number_repetitions, uint8_
 void microsd_spi::delay_command_out ( uint16_t  l ) const {
 	uint8_t buffer[l];								// Создаем буффер, который будет отправлен по SPI.
     memset(buffer, 0xFF, l);						// Заполняем 0xFF (пустышка).
-        ( *this->cfg->p_spi )->tx( buffer, l, 10 );
+        this->cfg->p_spi ->tx( buffer, l, 10 );
 }
 
 // Функция отправляет комманду с выбранным аргументом.
@@ -57,13 +57,13 @@ void microsd_spi::out_command ( uint8_t command, uint32_t arg ) const {
     buf[5] = this->crc7( buf, 5 );
 
 	// Выдаем комманду.
-    ( *this->cfg->p_spi )->tx( buf, 6, 10 );// CMD (сама комманда) + аргумент. 0x40 должно быть заранее прибавлено + CRC.
+    this->cfg->p_spi ->tx( buf, 6, 10 );// CMD (сама комманда) + аргумент. 0x40 должно быть заранее прибавлено + CRC.
 }
 
 // Ожидание R1 ответа.
 EC_SD_RESULT microsd_spi::read_r1 ( uint8_t& r1 ) const {	// Передаем FD SPI и указатель на переменную, в которую поместим R0 (если он придет).
     for (uint32_t l1=0; l1<10; l1++) {                      // Отправляем 10 0xFF. Если ничего не придет - ждем 1 мс и снова. Так 10 раз.
-        ( *this->cfg->p_spi )->rx( &r1, 1, 10, 0xFF );
+        this->cfg->p_spi ->rx( &r1, 1, 10, 0xFF );
         if ((r1 & (1<<7)) == 0)                             // Если пришло не 0xFF, то наш r1 пришел!
             return EC_SD_RESULT::OK;                        // Возвращаем успешное чтение.
     }
@@ -74,7 +74,7 @@ EC_SD_RESULT microsd_spi::read_r1 ( uint8_t& r1 ) const {	// Передаем FD
 EC_SD_RESULT microsd_spi::read_r3 ( uint8_t& r1, uint32_t& r3 ) const {	// Передаем FD SPI и указатель на переменную, в которую поместим R0 (если он придет).
     if ( this->read_r1( r1 ) != EC_SD_RESULT::OK ) return EC_SD_RESULT::ERROR;               // Если R1 пришел четко.
     if ( ( r1 & (1<<2) ) == 0) {					// Если команда, после которой должен прийти R7 поддерживается картой, то читаем еще 4 байта.
-            ( *this->cfg->p_spi )->rx( &r3, 4, 10, 0xFF);
+            this->cfg->p_spi ->rx( &r3, 4, 10, 0xFF);
         return EC_SD_RESULT::OK;							// Приняли 4 байта (OCR) - выходим.
     } else return EC_SD_RESULT::PARERR;					// Такой команды нет.
 }
@@ -83,7 +83,7 @@ EC_SD_RESULT microsd_spi::read_r3 ( uint8_t& r1, uint32_t& r3 ) const {	// Пе�
 EC_SD_RESULT microsd_spi::read_r7 ( uint8_t& r1, uint32_t& r7 ) const {	// Передаем FD SPI и указатель на переменную, в которую поместим R1(если он придет) и R7 (после прихода R1).
     if ( this->read_r1( r1 ) != EC_SD_RESULT::OK ) return EC_SD_RESULT::ERROR;	// Если R1 не пришла - выдаем ошибку.			// Если R1 пришел четко.
         if ( ( r1 & (1<<2) ) == 0 ) {	// Если команда, после которой должен прийти R7 поддерживается картой, то читаем еще 4 байта.
-                 ( *this->cfg->p_spi )->rx( &r7, 4, 10, 0xFF );
+                 this->cfg->p_spi ->rx( &r7, 4, 10, 0xFF );
         return EC_SD_RESULT::OK;		// Приняли 4 байта - выходим.
     } else return EC_SD_RESULT::PARERR;	// Такой команды нет.
     return EC_SD_RESULT::OK;
@@ -128,7 +128,7 @@ void microsd_spi::reset ( void ) const {
     this->cfg->cs->set();								// Переводим CS в 1 (для перевода в SPI режим).
 	uint8_t buffer[20];
 	memset(buffer, 0xFF, sizeof(buffer));
-    ( *this->cfg->p_spi )->tx( buffer, 20, 10 );
+    this->cfg->p_spi ->tx( buffer, 20, 10 );
     this->cfg->cs->reset();									// Включаем карту.
 }
 
@@ -146,7 +146,7 @@ EC_SD_RESULT microsd_spi::wake ( void ) const {
         this->out_command( 0x41, 0 );
 		for (int l = 0; l<5; l++){	// Ждем не более 5 байт и выходим (но должен, по идеи, на 2-й, считая с 1).
             uint8_t r1;
-                ( *this->cfg->p_spi )->rx( &r1, 1, 10, 0xFF );
+                this->cfg->p_spi ->rx( &r1, 1, 10, 0xFF );
             if (r1 == 0) return EC_SD_RESULT::OK;		// Мы проснулись. Все четко.
 		}
 	}
@@ -263,9 +263,9 @@ FRESULT microsd_spi::read_sector ( uint8_t *dst, uint32_t address ) const {
 		break;
 	};
 
-        ( *this->cfg->p_spi )->rx( dst, 512, 100, 0xFF );// Считываем 512 байт.
+        this->cfg->p_spi ->rx( dst, 512, 100, 0xFF );// Считываем 512 байт.
 	uint8_t crc_in[2] = {0xFF, 0xFF};	// Обязательно заполнить. Иначе карта примет мусор за команду и далее все закрешется.
-        ( *this->cfg->p_spi )->rx( crc_in, 2, 10, 0xFF );// Читаем CRC.
+        this->cfg->p_spi ->rx( crc_in, 2, 10, 0xFF );// Читаем CRC.
 
     this->cfg->cs->set();
 
@@ -279,7 +279,7 @@ FRESULT microsd_spi::read_sector ( uint8_t *dst, uint32_t address ) const {
 MICRO_SD_ANSWER_WRITE microsd_spi::wait_answer_write ( uint32_t number_attempts ) const {
     for ( uint32_t loop=0; loop < number_attempts; loop++ ) {	// Делаем number_attempts попыток с интервалом 1 мс выловить данные.
             uint8_t buf = 0;
-                ( *this->cfg->p_spi )->rx( &buf, 1, 10, 0xFF );
+                this->cfg->p_spi ->rx( &buf, 1, 10, 0xFF );
             if ((buf & (1<<4)) == 0) {					// Если пришел ответ.
                 buf &= 0b1111;							// Накладываем маску ответов.
                 if ( buf == (uint8_t)MICRO_SD_ANSWER_WRITE::DATA_IN_OK )           return MICRO_SD_ANSWER_WRITE::DATA_IN_OK;
@@ -316,10 +316,10 @@ FRESULT microsd_spi::write_sector ( uint32_t address, uint8_t *src ) const {
         this->out_command( 0x40 + 24, address );	// Шлем CMD24 с адресом сектора/байта, с которого будем читать (в зависимости от карты, должно быть заранее продумано по типу карты) в который будем писать.
         this->delay_command_out( 1 );		// Перед отправкой флага рекомендуется подождать >= 1 байт. Для надежности - ждем 10.
         buf = 0xFE;
-            ( *this->cfg->p_spi )->tx( &buf, 1, 10 );// Шлем флаг, что далее идут данные.
-            ( *this->cfg->p_spi )->tx( src, 512, 100 );// Выкидываем данные.
+            this->cfg->p_spi ->tx( &buf, 1, 10 );// Шлем флаг, что далее идут данные.
+            this->cfg->p_spi ->tx( src, 512, 100 );// Выкидываем данные.
 		uint8_t crc_out[2] = {0xFF, 0xFF};						// CRC пока что шлем левое (нужно реализовать CRC по идеи, чтобы потом включить режим с его поддержкой и увеличить вероятность успешной передачи).
-            ( *this->cfg->p_spi )->tx( crc_out, 2, 10 );// Передаем CRC.
+            this->cfg->p_spi ->tx( crc_out, 2, 10 );// Передаем CRC.
         if ( this->wait_answer_write( 100 ) != MICRO_SD_ANSWER_WRITE::DATA_IN_OK ) {	// Если ошибка.
 			loop--;
 			continue;
@@ -367,7 +367,7 @@ EC_SD_RESULT microsd_spi::get_CSD ( uint8_t *src ) const {
         uint32_t buf;
         if (this->consider_answer( MICRO_SD_ANSWER_TYPE::R1, r1, buf ) == EC_SD_RESULT::OK){				// Если R1 пришел.
 			if (r1 == 0){											// При этом он "чистый" (без ошибок).
-                    ( *this->cfg->p_spi )->rx( src, 16, 0xFF );// Считываем CSD.
+                    this->cfg->p_spi ->rx( src, 16, 0xFF );// Считываем CSD.
                 this->cfg->cs->set();
                 return EC_SD_RESULT::OK;
 			}
