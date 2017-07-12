@@ -1,6 +1,5 @@
 #pragma once
 
-#include <stdio.h>
 #include "user_hardware_interface.h"
 
 /*
