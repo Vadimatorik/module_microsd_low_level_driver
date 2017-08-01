@@ -41,7 +41,7 @@ enum class MICRO_SD_ANSWER_WRITE {
 
 
 // Тип возвращаемого значения полностью совместим с FATFS от chan-а FRESULT классом!
-enum class FRESULT{
+enum class EC_FRESULT{
     OK = 0,                 /* (0) Succeeded */
     DISK_ERR,               /* (1) A hard error occurred in the low level disk I/O layer */
     INT_ERR,                /* (2) Assertion failed */
@@ -101,10 +101,11 @@ public:
     // Считать сектор: структура карты, указатель на первый байт, куда будут помещены данные.
     // Адрес внутри microsd. В зависимости от карты: либо первого байта, откуда считать (выравнивание по 512 байт), либо адрес
     // сектора (каждый сектор 512 байт).
-    FRESULT write_sector ( uint32_t address, uint8_t *src ) const;
+    EC_FRESULT read_sector ( uint8_t *dst, uint32_t address ) const;
 
     // Записать по адресу address массив src длинной 512 байт.
-    FRESULT read_sector ( uint8_t *dst, uint32_t address ) const;
+    EC_FRESULT write_sector ( uint32_t address, uint8_t *src ) const;
+
     // По номеру сектора и типу SD решаем, какого типа адресация и возвращаем  адрес, который нужно передать в microsd.
     uint32_t get_address_for_sd_card ( uint32_t sector ) const;
 
