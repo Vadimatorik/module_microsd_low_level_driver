@@ -57,7 +57,7 @@ void microsd_spi::out_command ( uint8_t command, uint32_t arg ) const {
     buf[5] = this->crc7( buf, 5 );
 
 	// Выдаем комманду.
-    this->cfg->p_spi ->tx( buf, 6, 10 );// CMD (сама комманда) + аргумент. 0x40 должно быть заранее прибавлено + CRC.
+    this->cfg->p_spi->tx( buf, 6, 10 );// CMD (сама комманда) + аргумент. 0x40 должно быть заранее прибавлено + CRC.
 }
 
 // Ожидание R1 ответа.
@@ -128,7 +128,7 @@ void microsd_spi::reset ( void ) const {
     this->cfg->cs->set();								// Переводим CS в 1 (для перевода в SPI режим).
 	uint8_t buffer[20];
 	memset(buffer, 0xFF, sizeof(buffer));
-    this->cfg->p_spi ->tx( buffer, 20, 10 );
+    this->cfg->p_spi->tx( buffer, 20, 10 );
     this->cfg->cs->reset();									// Включаем карту.
 }
 
@@ -224,7 +224,7 @@ MICRO_SD_TYPE microsd_spi::card_type_definition_and_init ( void ) const {
 // Считать сектор: структура карты, указатель на первый байт, куда будут помещены данные.
 // Адрес внутри microsd. В зависимости от карты: либо первого байта, откуда считать (выравнивание по 512 байт), либо адрес
 // сектора (каждый сектор 512 байт).
-FRESULT microsd_spi::read_sector ( uint8_t *dst, uint32_t address ) const {
+EC_FRESULT microsd_spi::read_sector ( uint8_t *dst, uint32_t address ) const {
 //	if (d->cfg->spi_mutex != NULL) {	// Если мы используем mutex для предотвращения множественного доступа, то ждем его.
 //		 xSemaphoreTake (*d->cfg->spi_mutex, (TickType_t) (TickType_t)100 ); // Ждем, пока освободится SPI.
 //	};
@@ -235,7 +235,7 @@ FRESULT microsd_spi::read_sector ( uint8_t *dst, uint32_t address ) const {
         if (loop == 0) {			// Если колличество попыток исчерпано - выходим. Защита от зависания.
             this->cfg->cs->set();
             USER_OS_GIVE_MUTEX( this->mutex );
-            return FRESULT::DISK_ERR;
+            return EC_FRESULT::DISK_ERR;
 		};
     //	port_spi_baudrate_update(*d->cfg->spi_fd, d->cfg->init_spi_baudrate);				// Можно жить дальше.
         this->type_microsd = this->card_type_definition_and_init();
@@ -270,7 +270,7 @@ FRESULT microsd_spi::read_sector ( uint8_t *dst, uint32_t address ) const {
     this->cfg->cs->set();
 
     USER_OS_GIVE_MUTEX( this->mutex );
-    return FRESULT::OK;
+    return EC_FRESULT::OK;
 }
 
 
@@ -293,8 +293,8 @@ MICRO_SD_ANSWER_WRITE microsd_spi::wait_answer_write ( uint32_t number_attempts 
 
 
 // Записать по адресу address массив src длинной 512 байт.
-FRESULT microsd_spi::write_sector ( uint32_t address, uint8_t *src ) const {
-    FRESULT result_write_sector;
+EC_FRESULT microsd_spi::write_sector ( uint32_t address, uint8_t *src ) const {
+    EC_FRESULT result_write_sector;
 	uint8_t buf = 0xFF;											// Сюда кладем r0 ответ.
     USER_OS_TAKE_MUTEX( this->mutex, 100 );
 
@@ -303,7 +303,7 @@ FRESULT microsd_spi::write_sector ( uint32_t address, uint8_t *src ) const {
 		if (loop == 0){			// Если колличество попыток исчерпано - выходим. Защита от зависания.
             this->cfg->cs->set();
             USER_OS_GIVE_MUTEX( this->mutex );
-            return FRESULT::DISK_ERR;
+            return EC_FRESULT::DISK_ERR;
 		};
         //port_spi_baudrate_update(*d->cfg->spi_fd, d->cfg->init_spi_baudrate);				// Можно жить дальше.
         this->type_microsd = this->card_type_definition_and_init();
@@ -329,7 +329,7 @@ FRESULT microsd_spi::write_sector ( uint32_t address, uint8_t *src ) const {
 			loop--;
 			continue;
 		};
-        result_write_sector =  FRESULT::OK;			// Все четко, выходим.
+        result_write_sector =  EC_FRESULT::OK;			// Все четко, выходим.
 		break;
 	};
 
