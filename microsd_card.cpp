@@ -138,9 +138,9 @@ EC_SD_RESULT microsd_spi::out_ACMD_command ( uint8_t command, uint32_t arg ) con
 // Перевести карту в режим SPI (перезагрузить). 100 импульсов при CS = 1.
 void microsd_spi::reset ( void ) const {
     this->cfg->cs->set();                                // Переводим CS в 1 (для перевода в SPI режим).
-    uint8_t buffer[20];
-    memset(buffer, 0xFF, sizeof(buffer));
-    if ( this->cfg->p_spi->tx( buffer, 20, 10 ) != EC_SPI_BASE_RESULT::OK ) {
+    uint8_t buffer = 0xFF;
+    uint16_t count = 20;
+    if ( this->cfg->p_spi->tx_one_item( buffer, count, 10 ) != EC_SPI_BASE_RESULT::OK ) {
         while ( true ) {}  //  На случай ошибки SPI. Потом дописать.
     }
     this->cfg->cs->reset();                                    // Включаем карту.
