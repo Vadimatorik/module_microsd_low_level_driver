@@ -111,21 +111,18 @@ public:
 
     STA             microsd_card_get_card_info ( void ) const;
     EC_SD_RESULT    get_CSD ( uint8_t *src ) const;
-
+    MICRO_SD_TYPE   initialize ( void ) const;
 private:
-    EC_SD_RESULT    wait_byte_by_spi        ( uint32_t number_repetitions, uint8_t state ) const;
-    void            delay_command_out       ( uint16_t  l ) const;
-    void            out_command ( uint8_t command, uint32_t arg ) const;
-    EC_SD_RESULT    read_r1 ( uint8_t& r1 ) const ;
-    EC_SD_RESULT    read_r3 ( uint8_t& r1, uint32_t& r3 ) const;
-    EC_SD_RESULT    read_r7 ( uint8_t& r1, uint32_t& r7 ) const;
-    uint8_t         crc7 ( uint8_t *d, uint32_t l ) const;
-    EC_SD_RESULT    out_ACMD_command ( uint8_t command, uint32_t arg ) const;
-    EC_SD_RESULT    consider_answer( const MICRO_SD_ANSWER_TYPE type, uint8_t& r1, uint32_t& r_next ) const;
+    uint8_t crc7 ( uint8_t *d, uint32_t l ) const ;
+    int select (void)const	;
+    int             wait_ready ( uint32_t delay_ms )const;
+    void            deselect        ( void )const;
+    uint8_t         send_cmd        ( uint8_t cmd, uint32_t arg )const;
+    EC_SD_RESULT    consider_answer( const MICRO_SD_ANSWER_TYPE type, uint8_t* r1, uint32_t* r_next ) const;
     void            reset ( void ) const;
     EC_SD_RESULT    wake ( void ) const;
     MICRO_SD_ANSWER_WRITE wait_answer_write ( uint32_t number_attempts ) const;
-    MICRO_SD_TYPE   card_type_definition_and_init ( void ) const;
+
 
     const microsd_spi_cfg_t* const cfg;
     mutable MICRO_SD_TYPE             type_microsd = MICRO_SD_TYPE::ERROR;           // Тип microSD.
