@@ -95,9 +95,7 @@ struct microsd_spi_cfg_t {
 
 class microsd_spi {
 public:
-    constexpr microsd_spi( const microsd_spi_cfg_t* const cfg ) : cfg(cfg) {}
-    void    reinit          ( void ) const;
-
+    microsd_spi ( const microsd_spi_cfg_t* const cfg );
     // Считать сектор: структура карты, указатель на первый байт, куда будут помещены данные.
     // Адрес внутри microsd. В зависимости от карты: либо первого байта, откуда считать (выравнивание по 512 байт), либо адрес
     // сектора (каждый сектор 512 байт).
@@ -113,20 +111,9 @@ public:
     EC_SD_RESULT    get_CSD ( uint8_t *src ) const;
     MICRO_SD_TYPE   initialize ( void ) const;
 private:
-    uint8_t crc7 ( uint8_t *d, uint32_t l ) const ;
-    int select (void)const	;
-    int             wait_ready ( uint32_t delay_ms )const;
-    void            deselect        ( void )const;
-    uint8_t         send_cmd        ( uint8_t cmd, uint32_t arg )const;
-    EC_SD_RESULT    consider_answer( const MICRO_SD_ANSWER_TYPE type, uint8_t* r1, uint32_t* r_next ) const;
-    void            reset ( void ) const;
-    EC_SD_RESULT    wake ( void ) const;
-    MICRO_SD_ANSWER_WRITE wait_answer_write ( uint32_t number_attempts ) const;
-
-
-    const microsd_spi_cfg_t* const cfg;
+     const microsd_spi_cfg_t* const cfg;
     mutable MICRO_SD_TYPE             type_microsd = MICRO_SD_TYPE::ERROR;           // Тип microSD.
 
     mutable USER_OS_STATIC_MUTEX_BUFFER     mutex_buf = USER_OS_STATIC_MUTEX_BUFFER_INIT_VALUE;
     mutable USER_OS_STATIC_MUTEX            mutex = NULL;
-};
+}
