@@ -53,12 +53,12 @@ public:
     // 1. Распознает тип карты.
     // 2. Инициализирует ее в соответсвии с ее типом.
     //**********************************************************************
-    EC_MICRO_SD_TYPE   initialize ( void ) const;
+    EC_MICRO_SD_TYPE   initialize           ( void ) const;
 
     //**********************************************************************
     // Метод возвращает тип карты, определенный initialize.
     //**********************************************************************
-    EC_MICRO_SD_TYPE   get_type    ( void ) const;
+    EC_MICRO_SD_TYPE   get_type             ( void ) const;
 
     //**********************************************************************
     // Основываясь на ранее определенном типе (методом initialize)
@@ -68,15 +68,15 @@ public:
     // NOTRDY - если не удалось.
     // ERROR - ошибка интерфейса.
     //**********************************************************************
-    EC_SD_RESULT        wake_up     ( void ) const;
+    EC_SD_RESULT        wake_up             ( void ) const;
 
     // Считать сектор: структура карты, указатель на первый байт, куда будут помещены данные.
     // Адрес внутри microsd. В зависимости от карты: либо первого байта, откуда считать (выравнивание по 512 байт), либо адрес
     // сектора (каждый сектор 512 байт).
-    EC_SD_RESULT read_sector ( uint8_t *dst, uint32_t sector ) const;
+    EC_SD_RESULT        read_sector         ( uint32_t sector, uint8_t *target_array ) const;
 
     // Записать по адресу address массив src длинной 512 байт.
-    EC_SD_RESULT write_sector ( uint32_t address, uint8_t *src ) const;
+    EC_SD_RESULT        write_sector        ( uint8_t *source_array, uint32_t sector ) const;
 
 
 private:
@@ -98,6 +98,9 @@ private:
 
     // Ждем от команды специального маркера.
     EC_RES_WAITING  wait_mark                       ( uint8_t mark ) const;
+
+    // Сами отправляем маркер.
+    void            send_mark                       ( uint8_t mark ) const;
 
     // Просто передача команды.
     void            send_cmd                        ( uint8_t cmd, uint32_t arg, uint8_t crc ) const;

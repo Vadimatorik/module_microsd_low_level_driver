@@ -5,12 +5,15 @@
 #define CMD1        ( 0x40 + 1)                                                       // Инициировать процесс инициализации.
 #define CMD8        ( 0x40 + 8 )                                                      // Уточнить поддерживаемое нарпряжение.
 #define CMD17       ( 0x40 + 17 )                                                     // Считать блок.
+#define CMD24       ( 0x40 + 24 )                                                     // Записать блок.
 #define CMD55       ( 0x40 + 55 )                                                     // Указание, что далее ACMD.
 #define CMD58       ( 0x40 + 58 )                                                     // Считать OCR регистр карты.
 
 #define ACMD41      ( 0x40 + 41 )                                                     // Инициировать процесс инициализации.
 
 #define CMD17_MARK  ( 0b11111110 )
+#define CMD24_MARK  ( 0b11111110 )
+
 
 microsd_spi::microsd_spi ( const microsd_spi_cfg_t* const cfg ) : cfg( cfg ) {
     this->mutex = USER_OS_STATIC_MUTEX_CREATE( &this->mutex_buf );
@@ -87,6 +90,14 @@ void microsd_spi::send_cmd ( uint8_t cmd, uint32_t arg, uint8_t crc ) const {
     if ( this->cfg->p_spi->tx( output_package, 6, 10 ) != EC_SPI_BASE_RESULT::OK )
         while ( true ) {}  //  На случай ошибки SPI. Потом дописать.
 
+    this->cs_high();
+}
+
+// Сами отправляем маркер (нужно, например, для записи).
+void microsd_spi::send_mark ( uint8_t mark ) const {
+    this->cs_low();
+    if ( this->cfg->p_spi->tx( &mark, 1, 10 ) != EC_SPI_BASE_RESULT::OK )
+        while ( true ) {}  //  На случай ошибки SPI. Потом дописать.
     this->cs_high();
 }
 
@@ -266,7 +277,7 @@ EC_SD_RESULT microsd_spi::wake_up ( void ) const {
 // sector - требуемый сектор, с 0.
 // Предполагается, что с картой все хорошо (она определена, инициализирована).
 
-EC_SD_RESULT microsd_spi::read_sector ( uint8_t *dst, uint32_t sector ) const {
+EC_SD_RESULT microsd_spi::read_sector ( uint32_t sector, uint8_t *target_array ) const {
     uint32_t address;
     address = this->get_arg_address( sector ); // В зависимости от типа карты - адресация может быть побайтовая или поблочная
                                                // (блок - 512 байт).
@@ -282,10 +293,10 @@ EC_SD_RESULT microsd_spi::read_sector ( uint8_t *dst, uint32_t sector ) const {
     // Считываем 512 байт.
     this->cs_low();
 
-    if ( this->cfg->p_spi->rx( dst, 512, 100, 0xFF ) != EC_SPI_BASE_RESULT::OK )
+    if ( this->cfg->p_spi->rx( target_array, 512, 100, 0xFF ) != EC_SPI_BASE_RESULT::OK )
         while ( true ) {}                // На случай ошибки SPI. Потом дописать.
 
-    uint8_t crc_in[2] = {0xFF, 0xFF};    // Обязательно заполнить. Иначе карта примет мусор за команду и далее все закрешется.
+    uint8_t crc_in[2] = {0xFF, 0xFF};
 
     if ( this->cfg->p_spi->rx( crc_in, 2, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
         while ( true ) {}  //  На случай ошибки SPI. Потом дописать.
@@ -298,74 +309,53 @@ EC_SD_RESULT microsd_spi::read_sector ( uint8_t *dst, uint32_t sector ) const {
 }
 
 // Записать по адресу address массив src длинной 512 байт.
-//EC_FRESULT microsd_spi::write_sector ( uint32_t address, uint8_t *src ) const {
- //   (void)address; (void)src;
-  //  return EC_FRESULT::OK;
-    /*
-    EC_FRESULT result_write_sector;
-    uint8_t buf = 0xFF;                                            // Сюда кладем r0 ответ.
-    USER_OS_TAKE_MUTEX( this->mutex, 100 );
+EC_SD_RESULT microsd_spi::write_sector ( uint8_t *source_array, uint32_t sector ) const {
+    uint32_t address;
+    address = this->get_arg_address( sector );      // В зависимости от типа карты - адресация может быть побайтовая или поблочная
+                                                    // (блок - 512 байт).
+    this->send_cmd( CMD24, address, 0 );            // Отправляем CMD24.
+    uint8_t r1;
+    if ( this->wait_r1( &r1 ) != EC_RES_WAITING::OK )
+        return EC_SD_RESULT::ERROR;
+    if ( r1 != 0 ) return EC_SD_RESULT::ERROR;
 
-    uint8_t loop = 10;                // Колличество попыток обращения.
-    while (1){
-        if (loop == 0){            // Если колличество попыток исчерпано - выходим. Защита от зависания.
-            this->cfg->cs->set();
-            USER_OS_GIVE_MUTEX( this->mutex );
-            return EC_FRESULT::DISK_ERR;
-        };
-        //port_spi_baudrate_update(*d->cfg->spi_fd, d->cfg->init_spi_baudrate);                // Можно жить дальше.
-        this->type_microsd = this->card_type_definition_and_init();
-        if (this->type_microsd == MICRO_SD_TYPE::ERROR) {                // Если карта не запустилась - выходим с ошибкой.
-            loop--;
-            continue;
-        }
-        //port_spi_baudrate_update(*d->cfg->spi_fd, d->cfg->spi_baudrate_job);                // Можно жить дальше.
-        address = this->get_address_for_sd_card( address );// В зависимости от типа карты - адресация может быть побайтовая или поблочная (блок - 512 байт).
-        this->out_command( 0x40 + 24, address );    // Шлем CMD24 с адресом сектора/байта, с которого будем читать (в зависимости от карты, должно быть заранее продумано по типу карты) в который будем писать.
-        this->delay_command_out( 1 );        // Перед отправкой флага рекомендуется подождать >= 1 байт. Для надежности - ждем 10.
-        buf = 0xFE;
+    this->send_wait_one_package();                  // Обязательно ждем 1 пакет.
+    this->send_mark( CMD24_MARK );
 
-        // Шлем флаг, что далее идут данные.
-        if ( this->cfg->p_spi ->tx( &buf, 1, 10 ) != EC_SPI_BASE_RESULT::OK ) {
-            while ( true ) {}  //  На случай ошибки SPI. Потом дописать.
-        }
-        // Выкидываем данные.
-        if ( this->cfg->p_spi ->tx( src, 512, 100 ) != EC_SPI_BASE_RESULT::OK ) {
-            while ( true ) {}  //  На случай ошибки SPI. Потом дописать.
-        }
+    // Пишем 512 байт.
+    this->cs_low();
 
-        // CRC пока что шлем левое (нужно реализовать CRC по идеи, чтобы потом включить режим с его поддержкой и увеличить вероятность успешной передачи).
-        uint8_t crc_out[2] = {0xFF, 0xFF};
-        // Передаем CRC.
-        if ( this->cfg->p_spi->tx( crc_out, 2, 10 ) != EC_SPI_BASE_RESULT::OK ) {
-            while ( true ) {}  //  На случай ошибки SPI. Потом дописать.
-        }
-        if ( this->wait_answer_write( 100 ) != MICRO_SD_ANSWER_WRITE::DATA_IN_OK ) {    // Если ошибка.
-            loop--;
-            continue;
-        };
-        // Линия должна перейти в 0x00, потом в 0xff.
-        if ((this->wait_byte_by_spi( 3, 0) != EC_SD_RESULT::OK ) && (this->wait_byte_by_spi( 3, 0xFF) != EC_SD_RESULT::OK ) ){
-            loop--;
-            continue;
-        };
-        result_write_sector =  EC_FRESULT::OK;            // Все четко, выходим.
-        break;
-    };
+    if ( this->cfg->p_spi->tx( source_array, 512, 100 ) != EC_SPI_BASE_RESULT::OK )
+        while ( true ) {}                           // На случай ошибки SPI. Потом дописать.
 
-    this->cfg->cs->set();
-    USER_OS_GIVE_MUTEX( this->mutex );
-    return result_write_sector;*/
-//
+    uint8_t crc_out[2] = { 0 };                      // Отправляем любой CRC.
+    if ( this->cfg->p_spi->tx( crc_out, 2, 100 ) != EC_SPI_BASE_RESULT::OK )
+        while ( true ) {}                            // На случай ошибки SPI. Потом дописать.
 
-// Показываем, инициализирована ли карта. Используем enum из fatfs.
-/*
-STA microsd_spi::microsd_card_get_card_info ( void ) const {
-    if ( this->type_microsd != EC_MICRO_SD_TYPE::ERROR ) { // Если карты была инициализирована.
-        return STA::OK;
-    } else {
-        return STA::NOINIT;
+    // Сразу же должен прийти ответ - принята ли команда записи.
+    uint8_t answer_write_commend_in;
+    if ( this->cfg->p_spi->rx( &answer_write_commend_in, 1, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
+        return EC_SD_RESULT::ERROR;
+
+    if ( ( answer_write_commend_in & ( 1 << 4 ) ) != 0 )
+        return EC_SD_RESULT::ERROR;
+
+    answer_write_commend_in &= 0b1111;
+    if ( answer_write_commend_in != 0b0101 )    // Если не успех - выходим.
+        return EC_SD_RESULT::ERROR;
+
+    // Ждем окончания записи.
+    uint8_t write_wait = 0;
+    while ( write_wait == 0 ) {
+        if ( this->cfg->p_spi->rx( &write_wait, 1, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
+            return EC_SD_RESULT::ERROR;
     }
-}*/
+
+    this->cs_high();
+
+    this->send_wait_one_package();
+
+    return EC_SD_RESULT::OK;
+}
 
 
