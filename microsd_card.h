@@ -84,18 +84,25 @@ struct microsd_spi_cfg_t {
           uint32_t                  init_spi_baudrate;    // Скорость во время инициализации.
           uint32_t                  spi_baudrate_job;     // Скорость во время работы.
           spi_master_8bit_base*     const p_spi;
-    /*
-#ifdef MICRO_SD_CARD_UART_DEBUG_LOG_OUT
-    int                *uart_fd;            // Если включен режим вывода log-а по UART.
-#endif*/
 };
 
-//#define DEBUG_OUT(uart_fd, string);            port_uart_tx(uart_fd, string, sizeof(string), portMAX_DELAY);
-//#define DEBUG_OUT(uart_fd, string);
+// Результат ожидания чего-либо.
+enum class EC_RES_WAITING {
+    OK          =   0,
+    TIMEOUT     =   1
+};
 
 class microsd_spi {
 public:
     microsd_spi ( const microsd_spi_cfg_t* const cfg );
+
+    //**********************************************************************
+    // Метод:
+    // 1. Распознает тип карты.
+    // 2. Инициализирует ее в соответсвии с ее типом.
+    //**********************************************************************
+    MICRO_SD_TYPE   initialize ( void ) const;
+
     // Считать сектор: структура карты, указатель на первый байт, куда будут помещены данные.
     // Адрес внутри microsd. В зависимости от карты: либо первого байта, откуда считать (выравнивание по 512 байт), либо адрес
     // сектора (каждый сектор 512 байт).
@@ -109,11 +116,42 @@ public:
 
     STA             microsd_card_get_card_info ( void ) const;
     EC_SD_RESULT    get_CSD ( uint8_t *src ) const;
-    MICRO_SD_TYPE   initialize ( void ) const;
-private:
-     const microsd_spi_cfg_t* const cfg;
-    mutable MICRO_SD_TYPE             type_microsd = MICRO_SD_TYPE::ERROR;           // Тип microSD.
 
-    mutable USER_OS_STATIC_MUTEX_BUFFER     mutex_buf = USER_OS_STATIC_MUTEX_BUFFER_INIT_VALUE;
-    mutable USER_OS_STATIC_MUTEX            mutex = NULL;
-}
+private:
+    // Переключение CS.
+    void    cs_low                          ( void ) const;       // CS = 0, GND.
+    void    cs_high                         ( void ) const;       // CS = 1, VDD.
+
+    // Передать count пустых байт (шлем 0xFF).
+    void    send_empty_package              ( uint16_t count ) const;
+
+    // Передача 1 пустого байта. Требуется после каждой команды для ОЧЕНЬ старых карт.
+    void    send_wait_package               ( void ) const;
+
+    // Пропускаем count приших байт.
+    void    lose_package                    ( uint16_t count ) const;
+
+    // Переводим micro-sd в режим SPI.
+    void    init_spi_mode                   ( void ) const;
+
+    // Просто передача команды.
+    void    send_cmd                        ( uint8_t cmd, uint32_t arg, uint8_t crc ) const;
+    // Отправить ACMD.
+    EC_RES_WAITING  send_acmd ( uint8_t acmd, uint32_t arg, uint8_t crc ) const;
+
+
+    // Ждать R1.
+    EC_RES_WAITING    wait_r1               ( void ) const;
+    EC_RES_WAITING    wait_r1               ( uint8_t* r1 ) const;
+
+    // Принимаем R3 (регистр OCR).
+    EC_RES_WAITING    wait_r3               ( uint32_t* r3 ) const;
+
+    // Принимаем r7.
+    EC_RES_WAITING    wait_r7               ( uint32_t* r7 ) const;
+        const microsd_spi_cfg_t* const cfg;
+    MICRO_SD_TYPE       type_microsd = MICRO_SD_TYPE::ERROR;           // Тип microSD.
+
+    USER_OS_STATIC_MUTEX_BUFFER     mutex_buf = USER_OS_STATIC_MUTEX_BUFFER_INIT_VALUE;
+    USER_OS_STATIC_MUTEX            mutex =     nullptr;
+};
