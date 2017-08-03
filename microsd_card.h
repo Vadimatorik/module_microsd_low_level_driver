@@ -123,8 +123,9 @@ private:
     EC_RES_WAITING    wait_r7               ( uint32_t* r7 ) const;
 
     const microsd_spi_cfg_t*    const cfg;
-    EC_MICRO_SD_TYPE            type_microsd = EC_MICRO_SD_TYPE::ERROR;           // Тип microSD.
 
-    USER_OS_STATIC_MUTEX_BUFFER     mutex_buf   = USER_OS_STATIC_MUTEX_BUFFER_INIT_VALUE;
-    USER_OS_STATIC_MUTEX            mutex       = nullptr;
+    mutable EC_MICRO_SD_TYPE        type_microsd = EC_MICRO_SD_TYPE::ERROR;           // Тип microSD.
+
+    mutable USER_OS_STATIC_MUTEX_BUFFER     mutex_buf   = USER_OS_STATIC_MUTEX_BUFFER_INIT_VALUE;
+    mutable USER_OS_STATIC_MUTEX            mutex       = nullptr;
 };

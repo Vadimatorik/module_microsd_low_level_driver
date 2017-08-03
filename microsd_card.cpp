@@ -200,13 +200,17 @@ EC_MICRO_SD_TYPE microsd_spi::initialize ( void ) const {
                     this->send_cmd( CMD1, 0, 0 );
                     if ( this->wait_r1( &r1 ) != EC_RES_WAITING::OK ) return EC_MICRO_SD_TYPE::ERROR;
                     this->send_wait_one_package();
-                    if ( r1 == 0 )
+                    if ( r1 == 0 ) {
+                        this->type_microsd = EC_MICRO_SD_TYPE::MMC_V3;
                         return EC_MICRO_SD_TYPE::MMC_V3;   // MMC была успешно проинициализирована.
+                    }
                     USER_OS_DELAY_MS( 1 );
                 }
             }
-            if ( r1 == 0 )
+            if ( r1 == 0 ) {
+                this->type_microsd = EC_MICRO_SD_TYPE::SD_V1;
                 return EC_MICRO_SD_TYPE::SD_V1;
+            }
             USER_OS_DELAY_MS( 1 );
         }
         return EC_MICRO_SD_TYPE::ERROR;
@@ -230,8 +234,10 @@ EC_MICRO_SD_TYPE microsd_spi::initialize ( void ) const {
         if ( this->wait_r3( &ocr ) != EC_RES_WAITING::OK ) return EC_MICRO_SD_TYPE::ERROR;
         this->send_wait_one_package();
         if ( ( ocr & (1 << 30) ) == 0 ) {               // Если бит CCS в OCR сброшен, то...
+            this->type_microsd = EC_MICRO_SD_TYPE::SD_V2_BYTE;
             return EC_MICRO_SD_TYPE::SD_V2_BYTE;
         } else {
+            this->type_microsd = EC_MICRO_SD_TYPE::SD_V2_BLOCK;
             return EC_MICRO_SD_TYPE::SD_V2_BLOCK;
         }
     }
