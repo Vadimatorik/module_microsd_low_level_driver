@@ -176,7 +176,6 @@ EC_MICRO_SD_TYPE microsd_spi::initialize ( void ) const {
     this->send_cmd( CMD8, 0x1AA, 0x87 );                                                // Запрашиваем поддерживаемый диапазон напряжений.
     uint8_t r1;
     if ( this->wait_r1( &r1 ) != EC_RES_WAITING::OK ) return EC_MICRO_SD_TYPE::ERROR;   // R1 в любом случае должен прийти.
-    this->send_wait_one_package();
     // Если CMD8 не поддерживается, значит перед нами SD версии 1 или MMC.
     if ( ( r1 & ( 1 << 2 ) ) != 0 ) {
         // SD может инициализироваться до 1 секунды.
@@ -281,13 +280,17 @@ EC_SD_RESULT microsd_spi::read_sector ( uint8_t *dst, uint32_t sector ) const {
         return EC_SD_RESULT::ERROR;
 
     // Считываем 512 байт.
+    this->cs_low();
+
     if ( this->cfg->p_spi->rx( dst, 512, 100, 0xFF ) != EC_SPI_BASE_RESULT::OK )
-        while ( true ) {}  //  На случай ошибки SPI. Потом дописать.
+        while ( true ) {}                // На случай ошибки SPI. Потом дописать.
 
     uint8_t crc_in[2] = {0xFF, 0xFF};    // Обязательно заполнить. Иначе карта примет мусор за команду и далее все закрешется.
 
     if ( this->cfg->p_spi->rx( crc_in, 2, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
         while ( true ) {}  //  На случай ошибки SPI. Потом дописать.
+
+    this->cs_high();
 
     this->send_wait_one_package();
 
