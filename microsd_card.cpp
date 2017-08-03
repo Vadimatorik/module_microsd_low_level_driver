@@ -140,12 +140,14 @@ MICRO_SD_TYPE microsd_spi::initialize ( void ) const {
     this->send_wait_package();
     // Если CMD8 не поддерживается, значит перед нами SD версии 1 или MMC.
     if ( ( r1 & ( 1 << 2 ) ) != 0 ) {
-        for ( int loop_acmd41 = 0; loop_acmd41 < 10; loop_acmd41++ ) {                  // MMC не поддерживает ACMD41.
+        // SD может инициализироваться до 1 секунды.
+        for ( int loop_acmd41 = 0; loop_acmd41 < 1000; loop_acmd41++ ) {                  // MMC не поддерживает ACMD41.
             if ( this->send_acmd( ACMD41, 1 << 30, 0 ) != EC_RES_WAITING::OK ) return MICRO_SD_TYPE::ERROR;
             if ( this->wait_r1( &r1 ) != EC_RES_WAITING::OK ) return MICRO_SD_TYPE::ERROR;
             this->send_wait_package();
             if ( ( r1 & (1 << 2) ) != 0 ) {                                                         // Если команда не поддерживается, то перед нами MMC.
-                for ( int loop = 0; loop < 10; loop++ ) {                               // Пытаемся проинициализировать MMC карту.
+                // SD может инициализироваться до 1 секунды.
+                for ( int loop = 0; loop < 1000; loop++ ) {                               // Пытаемся проинициализировать MMC карту.
                     this->send_cmd( CMD1, 0, 0 );
                     if ( this->wait_r1( &r1 ) != EC_RES_WAITING::OK ) return MICRO_SD_TYPE::ERROR;
                     this->send_wait_package();
@@ -164,7 +166,8 @@ MICRO_SD_TYPE microsd_spi::initialize ( void ) const {
         // Но так как начало (r1) ответа r8 мы уже приняли, а оставшаяся нам не нужна, то просто пропускаем ее мимо.
         this->lose_package( 4 );
         this->send_wait_package();
-        for ( int loop_acmd41 = 0; loop_acmd41 < 10; loop_acmd41++ ) {
+        // SD может инициализироваться до 1 секунды.
+        for ( int loop_acmd41 = 0; loop_acmd41 < 1000; loop_acmd41++ ) {
             if ( this->send_acmd( ACMD41, 1 << 30, 0 ) != EC_RES_WAITING::OK ) return MICRO_SD_TYPE::ERROR;
             if ( this->wait_r1( &r1 ) != EC_RES_WAITING::OK ) return MICRO_SD_TYPE::ERROR;
             this->send_wait_package();
