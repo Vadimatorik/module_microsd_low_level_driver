@@ -34,7 +34,7 @@ void microsd_spi::cs_high ( void ) const {
 
 // Передать count пустых байт (шлем 0xFF).
 void microsd_spi::send_empty_package ( uint16_t count ) const {
-    if ( this->cfg->p_spi->tx_one_item( 0xFF, count, 10 ) != EC_SPI_BASE_RESULT::OK )
+    if ( this->cfg->p_spi_fast->tx_one_item( 0xFF, count, 10 ) != EC_SPI_BASE_RESULT::OK )
         while ( true ) {}  //  На случай ошибки SPI. Потом дописать.
 }
 
@@ -51,7 +51,7 @@ EC_RES_WAITING microsd_spi::wait_mark ( uint8_t mark ) const {
     this->cs_low();
     uint8_t input_buf;
     for ( int loop = 0; loop < 100; loop++ ) {
-        if ( this->cfg->p_spi->rx( &input_buf, 1, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
+        if ( this->cfg->p_spi_fast->rx( &input_buf, 1, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
             while ( true ) {}   //  На случай ошибки SPI. Потом дописать.
 
         if ( input_buf == mark ) {
@@ -87,7 +87,7 @@ void microsd_spi::send_cmd ( uint8_t cmd, uint32_t arg, uint8_t crc ) const {
     output_package[4] = ( uint8_t )( arg );
     output_package[5] = crc;
 
-    if ( this->cfg->p_spi->tx( output_package, 6, 10 ) != EC_SPI_BASE_RESULT::OK )
+    if ( this->cfg->p_spi_fast->tx( output_package, 6, 10 ) != EC_SPI_BASE_RESULT::OK )
         while ( true ) {}  //  На случай ошибки SPI. Потом дописать.
 
     this->cs_high();
@@ -96,7 +96,7 @@ void microsd_spi::send_cmd ( uint8_t cmd, uint32_t arg, uint8_t crc ) const {
 // Сами отправляем маркер (нужно, например, для записи).
 void microsd_spi::send_mark ( uint8_t mark ) const {
     this->cs_low();
-    if ( this->cfg->p_spi->tx( &mark, 1, 10 ) != EC_SPI_BASE_RESULT::OK )
+    if ( this->cfg->p_spi_fast->tx( &mark, 1, 10 ) != EC_SPI_BASE_RESULT::OK )
         while ( true ) {}  //  На случай ошибки SPI. Потом дописать.
     this->cs_high();
 }
@@ -107,7 +107,7 @@ EC_RES_WAITING microsd_spi::wait_r1 ( void ) const {
     uint8_t input_buf;
     // Карта должна принять команду в течении 10 обращений (чаще всего на 2-й итерации).
     for ( int loop = 0; loop < 10; loop++ ) {
-        if ( this->cfg->p_spi->rx( &input_buf, 1, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
+        if ( this->cfg->p_spi_fast->rx( &input_buf, 1, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
             while ( true ) {}   //  На случай ошибки SPI. Потом дописать.
         // Сброшенный старший бит символизирует успешное принятие R1 ответа.
         if ( ( input_buf & ( 1 << 7 ) ) == 0 ) {
@@ -124,7 +124,7 @@ EC_RES_WAITING microsd_spi::wait_r1 ( uint8_t* r1 ) const {
     this->cs_low();
     // Карта должна принять команду в течении 10 обращений (чаще всего на 2-й итерации).
     for ( int loop = 0; loop < 10; loop++ ) {
-        if ( this->cfg->p_spi->rx( r1, 1, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
+        if ( this->cfg->p_spi_fast->rx( r1, 1, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
             while ( true ) {}   //  На случай ошибки SPI. Потом дописать.
         // Сброшенный старший бит символизирует успешное принятие R1 ответа.
         if ( ( *r1 & ( 1 << 7 ) ) == 0 ) {
@@ -140,7 +140,7 @@ EC_RES_WAITING microsd_spi::wait_r1 ( uint8_t* r1 ) const {
 EC_RES_WAITING microsd_spi::wait_r3 ( uint32_t* r3 ) const {
     if ( this->wait_r1() != EC_RES_WAITING::OK ) return EC_RES_WAITING::TIMEOUT;
     this->cs_low();
-    if ( this->cfg->p_spi->rx( ( uint8_t* )r3, 4, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
+    if ( this->cfg->p_spi_fast->rx( ( uint8_t* )r3, 4, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
         while ( true ) {}   //  На случай ошибки SPI. Потом дописать.
     this->cs_high();
     return EC_RES_WAITING::OK;
@@ -179,70 +179,82 @@ uint32_t microsd_spi::get_arg_address ( uint32_t sector ) const {
 
 // Определяем тип карты и инициализируем ее.
 EC_MICRO_SD_TYPE microsd_spi::initialize ( void ) const {
-    this->init_spi_mode();                                                              // Переводим micro-sd в режим spi.
-    this->send_cmd( CMD0, 0, 0x95 );                                                    // Делаем программный сброс.
-    if ( this->wait_r1() != EC_RES_WAITING::OK ) return EC_MICRO_SD_TYPE::ERROR;
-    this->send_wait_one_package();
-    // Удостоверимся, что команда успешно принята.
-    this->send_cmd( CMD8, 0x1AA, 0x87 );                                                // Запрашиваем поддерживаемый диапазон напряжений.
-    uint8_t r1;
-    if ( this->wait_r1( &r1 ) != EC_RES_WAITING::OK ) return EC_MICRO_SD_TYPE::ERROR;   // R1 в любом случае должен прийти.
-    // Если CMD8 не поддерживается, значит перед нами SD версии 1 или MMC.
-    if ( ( r1 & ( 1 << 2 ) ) != 0 ) {
-        // SD может инициализироваться до 1 секунды.
-        for ( int loop_acmd41 = 0; loop_acmd41 < 1000; loop_acmd41++ ) {                // MMC не поддерживает ACMD41.
-            if ( this->send_acmd( ACMD41, 1 << 30, 0 ) != EC_RES_WAITING::OK ) return EC_MICRO_SD_TYPE::ERROR;
-            if ( this->wait_r1( &r1 ) != EC_RES_WAITING::OK ) return EC_MICRO_SD_TYPE::ERROR;
-            this->send_wait_one_package();
-            if ( ( r1 & (1 << 2) ) != 0 ) {                                             // Если команда не поддерживается, то перед нами MMC.
-                // SD может инициализироваться до 1 секунды.
-                for ( int loop = 0; loop < 1000; loop++ ) {                             // Пытаемся проинициализировать MMC карту.
-                    this->send_cmd( CMD1, 0, 0 );
-                    if ( this->wait_r1( &r1 ) != EC_RES_WAITING::OK ) return EC_MICRO_SD_TYPE::ERROR;
-                    this->send_wait_one_package();
-                    if ( r1 == 0 ) {
-                        this->type_microsd = EC_MICRO_SD_TYPE::MMC_V3;
-                        return EC_MICRO_SD_TYPE::MMC_V3;   // MMC была успешно проинициализирована.
+    this->cfg->p_spi_slow->reinit();                                                     // Переконфигурируем SPI в медленный режим ( на время инициализации ).
+    this->cfg->p_spi_slow->on();
+
+    EC_MICRO_SD_TYPE func_res = EC_MICRO_SD_TYPE::ERROR;
+    do {
+        this->init_spi_mode();                                                              // Переводим micro-sd в режим spi.
+        this->send_cmd( CMD0, 0, 0x95 );                                                    // Делаем программный сброс.
+        if ( this->wait_r1() != EC_RES_WAITING::OK ) break;
+        this->send_wait_one_package();
+        // Удостоверимся, что команда успешно принята.
+        this->send_cmd( CMD8, 0x1AA, 0x87 );                                                // Запрашиваем поддерживаемый диапазон напряжений.
+        uint8_t r1;
+        if ( this->wait_r1( &r1 ) != EC_RES_WAITING::OK ) break;                            // R1 в любом случае должен прийти.
+        // Если CMD8 не поддерживается, значит перед нами SD версии 1 или MMC.
+        if ( ( r1 & ( 1 << 2 ) ) != 0 ) {
+            // SD может инициализироваться до 1 секунды.
+            for ( int loop_acmd41 = 0; loop_acmd41 < 1000; loop_acmd41++ ) {                // MMC не поддерживает ACMD41.
+                if ( this->send_acmd( ACMD41, 1 << 30, 0 ) != EC_RES_WAITING::OK ) break;
+                if ( this->wait_r1( &r1 ) != EC_RES_WAITING::OK ) break;
+                this->send_wait_one_package();
+                if ( ( r1 & (1 << 2) ) != 0 ) {                                             // Если команда не поддерживается, то перед нами MMC.
+                    // SD может инициализироваться до 1 секунды.
+                    for ( int loop = 0; loop < 1000; loop++ ) {                             // Пытаемся проинициализировать MMC карту.
+                        this->send_cmd( CMD1, 0, 0 );
+                        if ( this->wait_r1( &r1 ) != EC_RES_WAITING::OK ) break;
+                        this->send_wait_one_package();
+                        if ( r1 == 0 ) {
+                            this->type_microsd = EC_MICRO_SD_TYPE::MMC_V3;
+                            func_res = EC_MICRO_SD_TYPE::MMC_V3;   // MMC была успешно проинициализирована.
+                            break;
+                        }
+                        USER_OS_DELAY_MS( 1 );
                     }
-                    USER_OS_DELAY_MS( 1 );
                 }
+                if ( r1 == 0 ) {
+                    this->type_microsd = EC_MICRO_SD_TYPE::SD_V1;
+                    func_res = EC_MICRO_SD_TYPE::SD_V1;
+                    break;
+                }
+                USER_OS_DELAY_MS( 1 );
             }
-            if ( r1 == 0 ) {
-                this->type_microsd = EC_MICRO_SD_TYPE::SD_V1;
-                return EC_MICRO_SD_TYPE::SD_V1;
-            }
-            USER_OS_DELAY_MS( 1 );
-        }
-        return EC_MICRO_SD_TYPE::ERROR;
-    } else { // Карта V2+.
-        // Нам должен прийти полный ответ от CMD8 (рас уж команда принята).
-        // Но так как начало (r1) ответа r8 мы уже приняли, а оставшаяся нам не нужна, то просто пропускаем ее мимо.
-        this->lose_package( 4 );
-        this->send_wait_one_package();
-        // SD может инициализироваться до 1 секунды.
-        for ( int loop_acmd41 = 0; loop_acmd41 < 1000; loop_acmd41++ ) {
-            if ( this->send_acmd( ACMD41, 1 << 30, 0 ) != EC_RES_WAITING::OK ) return EC_MICRO_SD_TYPE::ERROR;
-            if ( this->wait_r1( &r1 ) != EC_RES_WAITING::OK ) return EC_MICRO_SD_TYPE::ERROR;
+        } else { // Карта V2+.
+            // Нам должен прийти полный ответ от CMD8 (рас уж команда принята).
+            // Но так как начало (r1) ответа r8 мы уже приняли, а оставшаяся нам не нужна, то просто пропускаем ее мимо.
+            this->lose_package( 4 );
             this->send_wait_one_package();
-            if ( r1 == 0 ) break;
-            USER_OS_DELAY_MS( 1 );
+            // SD может инициализироваться до 1 секунды.
+            for ( int loop_acmd41 = 0; loop_acmd41 < 1000; loop_acmd41++ ) {
+                if ( this->send_acmd( ACMD41, 1 << 30, 0 ) != EC_RES_WAITING::OK ) break;
+                if ( this->wait_r1( &r1 ) != EC_RES_WAITING::OK ) break;
+                this->send_wait_one_package();
+                if ( r1 == 0 ) break;
+                USER_OS_DELAY_MS( 1 );
+            }
+            if ( r1 != 0 ) break; // Мы вышли по timeout-у?
+            // Карта инициализирована, осталось определить, v2 это или sdhc.
+            this->send_cmd( CMD58, 0, 0x95 );
+            uint32_t ocr;
+            if ( this->wait_r3( &ocr ) != EC_RES_WAITING::OK ) break;
+            this->send_wait_one_package();
+            if ( ( ocr & (1 << 30) ) == 0 ) {               // Если бит CCS в OCR сброшен, то...
+                this->type_microsd = EC_MICRO_SD_TYPE::SD_V2_BYTE;
+                func_res = EC_MICRO_SD_TYPE::SD_V2_BYTE;
+            } else {
+                this->type_microsd = EC_MICRO_SD_TYPE::SD_V2_BLOCK;
+                func_res = EC_MICRO_SD_TYPE::SD_V2_BLOCK;
+            }
         }
-        if ( r1 != 0 ) return EC_MICRO_SD_TYPE::ERROR; // Мы вышли по timeout-у?
-        // Карта инициализирована, осталось определить, v2 это или sdhc.
-        this->send_cmd( CMD58, 0, 0x95 );
-        uint32_t ocr;
-        if ( this->wait_r3( &ocr ) != EC_RES_WAITING::OK ) return EC_MICRO_SD_TYPE::ERROR;
-        this->send_wait_one_package();
-        if ( ( ocr & (1 << 30) ) == 0 ) {               // Если бит CCS в OCR сброшен, то...
-            this->type_microsd = EC_MICRO_SD_TYPE::SD_V2_BYTE;
-            return EC_MICRO_SD_TYPE::SD_V2_BYTE;
-        } else {
-            this->type_microsd = EC_MICRO_SD_TYPE::SD_V2_BLOCK;
-            return EC_MICRO_SD_TYPE::SD_V2_BLOCK;
-        }
+    } while ( false );
+
+    if ( func_res != EC_MICRO_SD_TYPE::ERROR ) {
+        this->cfg->p_spi_fast->reinit();                                                     // Переконфигурируем SPI в медленный режим ( на время инициализации ).
+        this->cfg->p_spi_fast->on();
     }
 
-    return EC_MICRO_SD_TYPE::ERROR;
+    return func_res;
 }
 
 EC_MICRO_SD_TYPE microsd_spi::get_type ( void ) const {
@@ -299,12 +311,12 @@ EC_SD_RESULT microsd_spi::read_sector ( uint32_t sector, uint8_t *target_array )
     // Считываем 512 байт.
     this->cs_low();
 
-    if ( this->cfg->p_spi->rx( target_array, 512, 100, 0xFF ) != EC_SPI_BASE_RESULT::OK )
+    if ( this->cfg->p_spi_fast->rx( target_array, 512, 100, 0xFF ) != EC_SPI_BASE_RESULT::OK )
         while ( true ) {}                // На случай ошибки SPI. Потом дописать.
 
     uint8_t crc_in[2] = {0xFF, 0xFF};
 
-    if ( this->cfg->p_spi->rx( crc_in, 2, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
+    if ( this->cfg->p_spi_fast->rx( crc_in, 2, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
         while ( true ) {}  //  На случай ошибки SPI. Потом дописать.
 
     this->cs_high();
@@ -331,16 +343,16 @@ EC_SD_RESULT microsd_spi::write_sector ( uint8_t *source_array, uint32_t sector 
     // Пишем 512 байт.
     this->cs_low();
 
-    if ( this->cfg->p_spi->tx( source_array, 512, 100 ) != EC_SPI_BASE_RESULT::OK )
+    if ( this->cfg->p_spi_fast->tx( source_array, 512, 100 ) != EC_SPI_BASE_RESULT::OK )
         while ( true ) {}                           // На случай ошибки SPI. Потом дописать.
 
     uint8_t crc_out[2] = { 0 };                      // Отправляем любой CRC.
-    if ( this->cfg->p_spi->tx( crc_out, 2, 100 ) != EC_SPI_BASE_RESULT::OK )
+    if ( this->cfg->p_spi_fast->tx( crc_out, 2, 100 ) != EC_SPI_BASE_RESULT::OK )
         while ( true ) {}                            // На случай ошибки SPI. Потом дописать.
 
     // Сразу же должен прийти ответ - принята ли команда записи.
     uint8_t answer_write_commend_in;
-    if ( this->cfg->p_spi->rx( &answer_write_commend_in, 1, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
+    if ( this->cfg->p_spi_fast->rx( &answer_write_commend_in, 1, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
         return EC_SD_RESULT::ERROR;
 
     if ( ( answer_write_commend_in & ( 1 << 4 ) ) != 0 )
@@ -353,7 +365,7 @@ EC_SD_RESULT microsd_spi::write_sector ( uint8_t *source_array, uint32_t sector 
     // Ждем окончания записи.
     uint8_t write_wait = 0;
     while ( write_wait == 0 ) {
-        if ( this->cfg->p_spi->rx( &write_wait, 1, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
+        if ( this->cfg->p_spi_fast->rx( &write_wait, 1, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
             return EC_SD_RESULT::ERROR;
     }
 

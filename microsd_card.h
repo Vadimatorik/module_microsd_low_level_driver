@@ -2,19 +2,6 @@
 
 #include "user_hardware_interface.h"
 
-/*
-#include "crc.h"                        // Для использования CRC7.
-#include "eflib_config.h"                // FreeRTOS.
-#include "eflib_config.h"
-#include "port_spi.h"                    // Работа с SPI.
-#include "errno.h"                        // Коды возвращаемых ошибок.
-#include "port_gpio.h"                    // Для дергания CS.
-#include "diskio.h"                        // Используем enum отсюда. Для повышения совместимости.
-#include "port_uart.h"
-#include <string.h>
-#include "ff.h"
-*/
-
 enum class EC_SD_RESULT {
     OK      = 0,        // 0: Successful
     ERROR   = 1,        // 1: R/W Error
@@ -33,9 +20,8 @@ enum class EC_MICRO_SD_TYPE {
 
 struct microsd_spi_cfg_t {
     const pin*                      const cs;             // Вывод CS, подключенный к microsd.
-          uint32_t                  init_spi_baudrate;    // Скорость во время инициализации.
-          uint32_t                  spi_baudrate_job;     // Скорость во время работы.
-          spi_master_8bit_base*     const p_spi;
+          spi_master_8bit_base*     const p_spi_slow;
+          spi_master_8bit_base*     const p_spi_fast;
 };
 
 // Результат ожидания чего-либо.
