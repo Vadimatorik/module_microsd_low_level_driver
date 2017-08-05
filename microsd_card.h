@@ -1,6 +1,8 @@
 #pragma once
 
-#include "user_hardware_interface.h"
+#include "mk_hardware_interfaces_spi.h"
+#include "mk_hardware_interfaces_pin.h"
+#include "user_os.h"
 
 enum class EC_SD_RESULT {
     OK      = 0,        // 0: Successful
@@ -19,7 +21,7 @@ enum class EC_MICRO_SD_TYPE {
 };
 
 struct microsd_spi_cfg_t {
-    const pin*                      const cs;             // Вывод CS, подключенный к microsd.
+    const pin_base*                 const cs;             // Вывод CS, подключенный к microsd.
           spi_master_8bit_base*     const p_spi_slow;
           spi_master_8bit_base*     const p_spi_fast;
 };
