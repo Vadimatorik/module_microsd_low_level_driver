@@ -114,6 +114,6 @@ private:
 
     mutable EC_MICRO_SD_TYPE        type_microsd = EC_MICRO_SD_TYPE::ERROR;           // Тип microSD.
 
-    mutable USER_OS_STATIC_MUTEX_BUFFER     mutex_buf   = USER_OS_STATIC_MUTEX_BUFFER_INIT_VALUE;
+    mutable USER_OS_STATIC_MUTEX_BUFFER     mutex_buf;
     mutable USER_OS_STATIC_MUTEX            mutex       = nullptr;
 };
