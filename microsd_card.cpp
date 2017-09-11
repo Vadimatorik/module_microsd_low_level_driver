@@ -34,7 +34,7 @@ void microsd_spi::cs_high ( void ) const {
 
 // Передать count пустых байт (шлем 0xFF).
 void microsd_spi::send_empty_package ( uint16_t count ) const {
-    if ( this->cfg->p_spi_fast->tx_one_item( 0xFF, count, 10 ) != EC_SPI_BASE_RESULT::OK )
+    if ( this->cfg->p_spi_fast->tx_one_item( 0xFF, count, 10 ) != SPI::BASE_RESULT::OK )
         while ( true ) {}  //  На случай ошибки SPI. Потом дописать.
 }
 
@@ -51,7 +51,7 @@ EC_RES_WAITING microsd_spi::wait_mark ( uint8_t mark ) const {
     this->cs_low();
     uint8_t input_buf;
     for ( int loop = 0; loop < 100; loop++ ) {
-        if ( this->cfg->p_spi_fast->rx( &input_buf, 1, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
+        if ( this->cfg->p_spi_fast->rx( &input_buf, 1, 10, 0xFF ) != SPI::BASE_RESULT::OK )
             while ( true ) {}   //  На случай ошибки SPI. Потом дописать.
 
         if ( input_buf == mark ) {
@@ -87,7 +87,7 @@ void microsd_spi::send_cmd ( uint8_t cmd, uint32_t arg, uint8_t crc ) const {
     output_package[4] = ( uint8_t )( arg );
     output_package[5] = crc;
 
-    if ( this->cfg->p_spi_fast->tx( output_package, 6, 10 ) != EC_SPI_BASE_RESULT::OK )
+    if ( this->cfg->p_spi_fast->tx( output_package, 6, 10 ) != SPI::BASE_RESULT::OK )
         while ( true ) {}  //  На случай ошибки SPI. Потом дописать.
 
     this->cs_high();
@@ -96,7 +96,7 @@ void microsd_spi::send_cmd ( uint8_t cmd, uint32_t arg, uint8_t crc ) const {
 // Сами отправляем маркер (нужно, например, для записи).
 void microsd_spi::send_mark ( uint8_t mark ) const {
     this->cs_low();
-    if ( this->cfg->p_spi_fast->tx( &mark, 1, 10 ) != EC_SPI_BASE_RESULT::OK )
+    if ( this->cfg->p_spi_fast->tx( &mark, 1, 10 ) != SPI::BASE_RESULT::OK )
         while ( true ) {}  //  На случай ошибки SPI. Потом дописать.
     this->cs_high();
 }
@@ -107,7 +107,7 @@ EC_RES_WAITING microsd_spi::wait_r1 ( void ) const {
     uint8_t input_buf;
     // Карта должна принять команду в течении 10 обращений (чаще всего на 2-й итерации).
     for ( int loop = 0; loop < 10; loop++ ) {
-        if ( this->cfg->p_spi_fast->rx( &input_buf, 1, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
+        if ( this->cfg->p_spi_fast->rx( &input_buf, 1, 10, 0xFF ) != SPI::BASE_RESULT::OK )
             while ( true ) {}   //  На случай ошибки SPI. Потом дописать.
         // Сброшенный старший бит символизирует успешное принятие R1 ответа.
         if ( ( input_buf & ( 1 << 7 ) ) == 0 ) {
@@ -124,7 +124,7 @@ EC_RES_WAITING microsd_spi::wait_r1 ( uint8_t* r1 ) const {
     this->cs_low();
     // Карта должна принять команду в течении 10 обращений (чаще всего на 2-й итерации).
     for ( int loop = 0; loop < 10; loop++ ) {
-        if ( this->cfg->p_spi_fast->rx( r1, 1, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
+        if ( this->cfg->p_spi_fast->rx( r1, 1, 10, 0xFF ) != SPI::BASE_RESULT::OK )
             while ( true ) {}   //  На случай ошибки SPI. Потом дописать.
         // Сброшенный старший бит символизирует успешное принятие R1 ответа.
         if ( ( *r1 & ( 1 << 7 ) ) == 0 ) {
@@ -140,7 +140,7 @@ EC_RES_WAITING microsd_spi::wait_r1 ( uint8_t* r1 ) const {
 EC_RES_WAITING microsd_spi::wait_r3 ( uint32_t* r3 ) const {
     if ( this->wait_r1() != EC_RES_WAITING::OK ) return EC_RES_WAITING::TIMEOUT;
     this->cs_low();
-    if ( this->cfg->p_spi_fast->rx( ( uint8_t* )r3, 4, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
+    if ( this->cfg->p_spi_fast->rx( ( uint8_t* )r3, 4, 10, 0xFF ) != SPI::BASE_RESULT::OK )
         while ( true ) {}   //  На случай ошибки SPI. Потом дописать.
     this->cs_high();
     return EC_RES_WAITING::OK;
@@ -312,12 +312,12 @@ EC_SD_RESULT microsd_spi::read_sector ( uint32_t sector, uint8_t *target_array )
     // Считываем 512 байт.
     this->cs_low();
 
-    if ( this->cfg->p_spi_fast->rx( target_array, 512, 100, 0xFF ) != EC_SPI_BASE_RESULT::OK )
+    if ( this->cfg->p_spi_fast->rx( target_array, 512, 100, 0xFF ) != SPI::BASE_RESULT::OK )
         while ( true ) {}                // На случай ошибки SPI. Потом дописать.
 
     uint8_t crc_in[2] = {0xFF, 0xFF};
 
-    if ( this->cfg->p_spi_fast->rx( crc_in, 2, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
+    if ( this->cfg->p_spi_fast->rx( crc_in, 2, 10, 0xFF ) != SPI::BASE_RESULT::OK )
         while ( true ) {}  //  На случай ошибки SPI. Потом дописать.
 
     this->cs_high();
@@ -344,16 +344,16 @@ EC_SD_RESULT microsd_spi::write_sector ( uint8_t *source_array, uint32_t sector 
     // Пишем 512 байт.
     this->cs_low();
 
-    if ( this->cfg->p_spi_fast->tx( source_array, 512, 100 ) != EC_SPI_BASE_RESULT::OK )
+    if ( this->cfg->p_spi_fast->tx( source_array, 512, 100 ) != SPI::BASE_RESULT::OK )
         while ( true ) {}                           // На случай ошибки SPI. Потом дописать.
 
     uint8_t crc_out[2] = { 0 };                      // Отправляем любой CRC.
-    if ( this->cfg->p_spi_fast->tx( crc_out, 2, 100 ) != EC_SPI_BASE_RESULT::OK )
+    if ( this->cfg->p_spi_fast->tx( crc_out, 2, 100 ) != SPI::BASE_RESULT::OK )
         while ( true ) {}                            // На случай ошибки SPI. Потом дописать.
 
     // Сразу же должен прийти ответ - принята ли команда записи.
     uint8_t answer_write_commend_in;
-    if ( this->cfg->p_spi_fast->rx( &answer_write_commend_in, 1, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
+    if ( this->cfg->p_spi_fast->rx( &answer_write_commend_in, 1, 10, 0xFF ) != SPI::BASE_RESULT::OK )
         return EC_SD_RESULT::ERROR;
 
     if ( ( answer_write_commend_in & ( 1 << 4 ) ) != 0 )
@@ -366,7 +366,7 @@ EC_SD_RESULT microsd_spi::write_sector ( uint8_t *source_array, uint32_t sector 
     // Ждем окончания записи.
     uint8_t write_wait = 0;
     while ( write_wait == 0 ) {
-        if ( this->cfg->p_spi_fast->rx( &write_wait, 1, 10, 0xFF ) != EC_SPI_BASE_RESULT::OK )
+        if ( this->cfg->p_spi_fast->rx( &write_wait, 1, 10, 0xFF ) != SPI::BASE_RESULT::OK )
             return EC_SD_RESULT::ERROR;
     }
 
