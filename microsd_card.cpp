@@ -55,7 +55,7 @@ EC_RES_WAITING microsd_spi::wait_mark ( spi_master_8bit_base* const spi, uint8_t
 
     this->cs_low();
 
-    for ( int loop = 0; loop < 10; loop++ ) {
+    for ( int loop = 0; loop < 100; loop++ ) {
         uint8_t input_buf;
 
         if ( spi->rx( &input_buf, 1, 10, 0xFF ) != SPI::BASE_RESULT::OK ) {
@@ -372,7 +372,6 @@ EC_SD_RESULT microsd_spi::read_sector ( uint32_t sector, uint8_t *target_array )
 
     address = this->get_arg_address( sector );                                              // В зависимости от типа карты - адресация может быть побайтовая или поблочная
                                                                                             // (блок - 512 байт).
-
     do {
         if ( this->send_cmd( s, CMD17, address, 0 )     != EC_RES_WAITING::OK ) break;          // Отправляем CMD17.
         uint8_t r1;
@@ -384,13 +383,10 @@ EC_SD_RESULT microsd_spi::read_sector ( uint32_t sector, uint8_t *target_array )
         this->cs_low();
 
         if ( s->rx( target_array, 512, 100, 0xFF )      != SPI::BASE_RESULT::OK ) break;
-
         uint8_t crc_in[2] = {0xFF, 0xFF};
 
         if ( s->rx( crc_in, 2, 10, 0xFF )               != SPI::BASE_RESULT::OK ) break;
-
         if ( this->send_wait_one_package( s )           != EC_RES_WAITING::OK ) break;
-
         r = EC_SD_RESULT::OK;
     }  while ( false );
 
