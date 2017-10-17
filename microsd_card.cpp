@@ -55,18 +55,22 @@ EC_RES_WAITING microsd_spi::wait_mark ( spi_master_8bit_base* const spi, uint8_t
 
     this->cs_low();
 
-    for ( int loop = 0; loop < 100; loop++ ) {
-        uint8_t input_buf;
+    for ( int l_d = 0; l_d < 5; l_d++ ) {                                               // До 5 мс даем возможность карте ответить.
+        for ( int loop = 0; loop < 10; loop++ ) {
+            uint8_t input_buf;
 
-        if ( spi->rx( &input_buf, 1, 10, 0xFF ) != SPI::BASE_RESULT::OK ) {
-            r = EC_RES_WAITING::IO_ERROR;
-            break;
-        }
+            if ( spi->rx( &input_buf, 1, 10, 0xFF ) != SPI::BASE_RESULT::OK ) {
+                r = EC_RES_WAITING::IO_ERROR;
+                break;
+            }
 
-        if ( input_buf == mark ) {
-            r = EC_RES_WAITING::OK;
-            break;
+            if ( input_buf == mark ) {
+                r = EC_RES_WAITING::OK;
+                break;
+            }
         }
+        if ( r != EC_RES_WAITING::TIMEOUT ) break;
+        USER_OS_DELAY_MS(1);
     }
 
     this->cs_high();
