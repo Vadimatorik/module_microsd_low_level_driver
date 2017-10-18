@@ -420,7 +420,6 @@ EC_SD_RESULT microsd_spi::write_sector ( uint8_t *source_array, uint32_t sector 
         uint8_t r1;
         if ( this->wait_r1( s, &r1 )                                != EC_RES_WAITING::OK ) break;
         if ( r1 != 0 ) break;
-
         if ( this->send_wait_one_package( s )                       != EC_RES_WAITING::OK ) break;                  // Обязательно ждем 1 пакет.
         if ( this->send_mark( s, CMD24_MARK )                       != EC_RES_WAITING::OK ) break;
 
@@ -428,26 +427,22 @@ EC_SD_RESULT microsd_spi::write_sector ( uint8_t *source_array, uint32_t sector 
         this->cs_low();
 
         if ( this->cfg->p_spi_fast->tx( source_array, 512, 100 )    != SPI::BASE_RESULT::OK )   break;
-
         uint8_t crc_out[2] = { 0 };                      // Отправляем любой CRC.
         if ( this->cfg->p_spi_fast->tx( crc_out, 2, 100 )           != SPI::BASE_RESULT::OK )   break;
-
         // Сразу же должен прийти ответ - принята ли команда записи.
         uint8_t answer_write_commend_in;
         if ( this->cfg->p_spi_fast->rx( &answer_write_commend_in, 1, 10, 0xFF ) != SPI::BASE_RESULT::OK )   break;
-
         if ( ( answer_write_commend_in & ( 1 << 4 ) ) != 0 ) break;
-
         answer_write_commend_in &= 0b1111;
         if ( answer_write_commend_in != 0b0101 )             break; // Если не успех - выходим.
-
         // Ждем окончания записи.
         uint8_t write_wait = 0;
         while ( write_wait == 0 ) {
             if ( this->cfg->p_spi_fast->rx( &write_wait, 1, 10, 0xFF ) != SPI::BASE_RESULT::OK ) break;
         }
-
-        this->send_wait_one_package( s );
+        if ( write_wait == 0 ) break;
+        if ( this->send_wait_one_package( s ) != EC_RES_WAITING::OK ) break;
+        r = EC_SD_RESULT::OK;
     } while ( false );
 
     this->cs_high();
