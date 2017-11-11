@@ -22,8 +22,9 @@ enum class EC_MICRO_SD_TYPE {
 
 struct microsd_spi_cfg_t {
     const pin_base*             const cs;             // Вывод CS, подключенный к microsd.
-          spi_master_8bit_base* const p_spi_slow;
-          spi_master_8bit_base* const p_spi_fast;
+          spi_master_8bit_base* const p_spi;
+    const uint32_t              slow;
+    const uint32_t              fast;
 };
 
 // Результат ожидания чего-либо.
@@ -74,41 +75,41 @@ private:
     void            cs_high                         ( void ) const;       // CS = 1, VDD.
 
     // Передать count пустых байт (шлем 0xFF).
-    EC_RES_WAITING  send_empty_package              ( spi_master_8bit_base* const spi, uint16_t count ) const;
+    EC_RES_WAITING  send_empty_package              ( uint16_t count ) const;
 
     // Передача 1 пустого байта. Требуется после каждой команды для ОЧЕНЬ старых карт.
-    EC_RES_WAITING  send_wait_one_package           ( spi_master_8bit_base* const spi ) const;
+    EC_RES_WAITING  send_wait_one_package           ( void ) const;
 
     // Пропускаем count приших байт.
-    EC_RES_WAITING  lose_package                    ( spi_master_8bit_base* const spi, uint16_t count ) const;
+    EC_RES_WAITING  lose_package                    ( uint16_t count ) const;
 
     // Переводим micro-sd в режим SPI.
-    EC_RES_WAITING  init_spi_mode                   ( spi_master_8bit_base* const spi ) const;
+    EC_RES_WAITING  init_spi_mode                   ( void ) const;
 
     // Ждем от команды специального маркера.
-    EC_RES_WAITING  wait_mark                       ( spi_master_8bit_base* const spi,  uint8_t mark ) const;
+    EC_RES_WAITING  wait_mark                       (  uint8_t mark ) const;
 
     // Сами отправляем маркер.
-    EC_RES_WAITING  send_mark                       ( spi_master_8bit_base* const spi, uint8_t mark ) const;
+    EC_RES_WAITING  send_mark                       ( uint8_t mark ) const;
 
     // Просто передача команды.
-    EC_RES_WAITING  send_cmd                        ( spi_master_8bit_base* const spi, uint8_t cmd, uint32_t arg, uint8_t crc ) const;
+    EC_RES_WAITING  send_cmd                        ( uint8_t cmd, uint32_t arg, uint8_t crc ) const;
 
     // Получаем адресс сектора (для аргумента команды чтения/записи).
     uint32_t        get_arg_address                 ( uint32_t sector ) const;
 
     // Отправить ACMD.
-    EC_RES_WAITING  send_acmd ( spi_master_8bit_base* const spi, uint8_t acmd, uint32_t arg, uint8_t crc ) const;
+    EC_RES_WAITING  send_acmd ( uint8_t acmd, uint32_t arg, uint8_t crc ) const;
 
 
     // Ждать R1 (если r1 != nullptr, то еще вернуть R1 ).
-    EC_RES_WAITING  wait_r1                         ( spi_master_8bit_base* const spi, uint8_t* r1 = nullptr ) const;
+    EC_RES_WAITING  wait_r1                         ( uint8_t* r1 = nullptr ) const;
 
     // Принимаем R3 (регистр OCR).
-    EC_RES_WAITING  wait_r3                         ( spi_master_8bit_base* const spi,uint32_t* r3 ) const;
+    EC_RES_WAITING  wait_r3                         ( uint32_t* r3 ) const;
 
     // Принимаем r7.
-    EC_RES_WAITING  wait_r7                         ( spi_master_8bit_base* const spi,uint32_t* r7 ) const;
+    EC_RES_WAITING  wait_r7                         ( uint32_t* r7 ) const;
 
     const microsd_spi_cfg_t*    const cfg;
 
