@@ -34,7 +34,7 @@ void microsd_spi::cs_high ( void ) const {
 
 // Передать count 0xFF.
 EC_RES_WAITING microsd_spi::send_empty_package ( uint16_t count ) const {
-    if ( this->cfg->p_spi->tx_one_item( 0xFF, count, 10 ) == SPI::BASE_RESULT::OK ) {
+    if ( this->cfg->p_spi->tx_one_item( 0xFF, count, 10 ) == BASE_RESULT::OK ) {
         return EC_RES_WAITING::OK;
     } else {
         return EC_RES_WAITING::IO_ERROR;
@@ -60,7 +60,7 @@ EC_RES_WAITING microsd_spi::wait_mark ( uint8_t mark ) const {
         for ( int loop = 0; loop < 10; loop++ ) {
             uint8_t input_buf;
 
-            if ( this->cfg->p_spi->rx( &input_buf, 1, 10, 0xFF ) != SPI::BASE_RESULT::OK ) {
+            if ( this->cfg->p_spi->rx( &input_buf, 1, 10, 0xFF ) != BASE_RESULT::OK ) {
                 r = EC_RES_WAITING::IO_ERROR;
                 break;
             }
@@ -104,7 +104,7 @@ EC_RES_WAITING microsd_spi::send_cmd ( uint8_t cmd, uint32_t arg, uint8_t crc ) 
     output_package[5] = crc;
 
     EC_RES_WAITING r = EC_RES_WAITING::OK;
-    if ( this->cfg->p_spi->tx( output_package, 6, 10 ) != SPI::BASE_RESULT::OK ) {
+    if ( this->cfg->p_spi->tx( output_package, 6, 10 ) != BASE_RESULT::OK ) {
         r = EC_RES_WAITING::IO_ERROR;
     }
 
@@ -119,7 +119,7 @@ EC_RES_WAITING microsd_spi::send_mark ( uint8_t mark ) const {
 
     EC_RES_WAITING r = EC_RES_WAITING::OK;
 
-    if ( this->cfg->p_spi->tx( &mark, 1, 10 ) != SPI::BASE_RESULT::OK ) {
+    if ( this->cfg->p_spi->tx( &mark, 1, 10 ) != BASE_RESULT::OK ) {
         r = EC_RES_WAITING::IO_ERROR;
     }
 
@@ -138,7 +138,7 @@ EC_RES_WAITING microsd_spi::wait_r1 ( uint8_t* r1 ) const {
     for ( int loop = 0; loop < 10; loop++ ) {
         uint8_t input_buf;
 
-        if ( this->cfg->p_spi->rx( &input_buf, 1, 10, 0xFF ) != SPI::BASE_RESULT::OK ) {
+        if ( this->cfg->p_spi->rx( &input_buf, 1, 10, 0xFF ) != BASE_RESULT::OK ) {
             r = EC_RES_WAITING::IO_ERROR;
             break;
         }
@@ -168,7 +168,7 @@ EC_RES_WAITING microsd_spi::wait_r3 ( uint32_t* r3 ) const {
 
     this->cs_low();
 
-    if ( this->cfg->p_spi->rx( ( uint8_t* )r3, 4, 10, 0xFF ) != SPI::BASE_RESULT::OK ) {
+    if ( this->cfg->p_spi->rx( ( uint8_t* )r3, 4, 10, 0xFF ) != BASE_RESULT::OK ) {
         r = EC_RES_WAITING::IO_ERROR;
     }
 
@@ -388,10 +388,10 @@ EC_SD_RESULT microsd_spi::read_sector ( uint32_t sector, uint8_t *target_array )
         // Считываем 512 байт.
         this->cs_low();
 
-        if ( this->cfg->p_spi->rx( target_array, 512, 100, 0xFF )      != SPI::BASE_RESULT::OK ) break;
+        if ( this->cfg->p_spi->rx( target_array, 512, 100, 0xFF )      != BASE_RESULT::OK ) break;
         uint8_t crc_in[2] = {0xFF, 0xFF};
 
-        if ( this->cfg->p_spi->rx( crc_in, 2, 10, 0xFF )               != SPI::BASE_RESULT::OK ) break;
+        if ( this->cfg->p_spi->rx( crc_in, 2, 10, 0xFF )               != BASE_RESULT::OK ) break;
         if ( this->send_wait_one_package()           != EC_RES_WAITING::OK ) break;
         r = EC_SD_RESULT::OK;
     }  while ( false );
@@ -429,19 +429,19 @@ EC_SD_RESULT microsd_spi::write_sector ( uint8_t *source_array, uint32_t sector 
         // Пишем 512 байт.
         this->cs_low();
 
-        if ( this->cfg->p_spi->tx( source_array, 512, 100 )    != SPI::BASE_RESULT::OK )   break;
+        if ( this->cfg->p_spi->tx( source_array, 512, 100 )    != BASE_RESULT::OK )   break;
         uint8_t crc_out[2] = { 0 };                      // Отправляем любой CRC.
-        if ( this->cfg->p_spi->tx( crc_out, 2, 100 )           != SPI::BASE_RESULT::OK )   break;
+        if ( this->cfg->p_spi->tx( crc_out, 2, 100 )           != BASE_RESULT::OK )   break;
         // Сразу же должен прийти ответ - принята ли команда записи.
         uint8_t answer_write_commend_in;
-        if ( this->cfg->p_spi->rx( &answer_write_commend_in, 1, 10, 0xFF ) != SPI::BASE_RESULT::OK )   break;
+        if ( this->cfg->p_spi->rx( &answer_write_commend_in, 1, 10, 0xFF ) != BASE_RESULT::OK )   break;
         if ( ( answer_write_commend_in & ( 1 << 4 ) ) != 0 ) break;
         answer_write_commend_in &= 0b1111;
         if ( answer_write_commend_in != 0b0101 )             break; // Если не успех - выходим.
         // Ждем окончания записи.
         uint8_t write_wait = 0;
         while ( write_wait == 0 ) {
-            if ( this->cfg->p_spi->rx( &write_wait, 1, 10, 0xFF ) != SPI::BASE_RESULT::OK ) break;
+            if ( this->cfg->p_spi->rx( &write_wait, 1, 10, 0xFF ) != BASE_RESULT::OK ) break;
         }
         if ( write_wait == 0 ) break;
         if ( this->send_wait_one_package() != EC_RES_WAITING::OK ) break;
