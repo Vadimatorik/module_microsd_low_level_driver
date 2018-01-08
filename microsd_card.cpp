@@ -224,6 +224,7 @@ EC_MICRO_SD_TYPE microsd_spi::initialize ( void ) const {
     EC_MICRO_SD_TYPE r = EC_MICRO_SD_TYPE::ERROR;
 
     do {
+    	this->cs_high();
         if ( this->init_spi_mode()               != EC_RES_WAITING::OK ) break;                  // Переводим micro-sd в режим spi.
         if ( this->send_cmd( CMD0, 0, 0x95 )     != EC_RES_WAITING::OK ) break;                  // Делаем программный сброс.
         if ( this->wait_r1()                     != EC_RES_WAITING::OK ) break;
@@ -235,14 +236,14 @@ EC_MICRO_SD_TYPE microsd_spi::initialize ( void ) const {
         // Если CMD8 не поддерживается, значит перед нами SD версии 1 или MMC.
         if ( ( r1 & ( 1 << 2 ) ) != 0 ) {
             // SD может инициализироваться до 1 секунды.
-            for ( int loop_acmd41 = 0; loop_acmd41 < 1000; loop_acmd41++ ) {                        // MMC не поддерживает ACMD41.
+            for ( int loop_acmd41 = 0; loop_acmd41 < 100; loop_acmd41++ ) {                        // MMC не поддерживает ACMD41.
                 if ( this->send_acmd( ACMD41, 1 << 30, 0 )   != EC_RES_WAITING::OK ) break;
                 if ( this->wait_r1( &r1 )                    != EC_RES_WAITING::OK ) break;
                 if ( this->send_wait_one_package()           != EC_RES_WAITING::OK ) break;
 
                 if ( ( r1 & ( 1 << 2 ) ) != 0 ) {                                                   // Если команда не поддерживается, то перед нами MMC.
-                    // SD может инициализироваться до 1 секунды.
-                    for ( int loop = 0; loop < 1000; loop++ ) {                                     // Пытаемся проинициализировать MMC карту.
+                    // SD может инициализироваться до 1 секунды (примерно 100 циклов).
+                    for ( int loop = 0; loop < 100; loop++ ) {                                     // Пытаемся проинициализировать MMC карту.
                         if ( this->send_cmd( CMD1, 0, 0 )        != EC_RES_WAITING::OK ) break;
                         if ( this->wait_r1( &r1 )                != EC_RES_WAITING::OK ) break;
                         if ( this->send_wait_one_package()       != EC_RES_WAITING::OK ) break;
@@ -269,7 +270,7 @@ EC_MICRO_SD_TYPE microsd_spi::initialize ( void ) const {
             if ( this->lose_package( 4 )        != EC_RES_WAITING::OK ) break;
             if ( this->send_wait_one_package()  != EC_RES_WAITING::OK ) break;
             // SD может инициализироваться до 1 секунды.
-            for ( int loop_acmd41 = 0; loop_acmd41 < 1000; loop_acmd41++ ) {
+            for ( int loop_acmd41 = 0; loop_acmd41 < 100; loop_acmd41++ ) {
                 if ( this->send_acmd( ACMD55, 0, 0 )   != EC_RES_WAITING::OK ) break;
                 if ( this->wait_r1( &r1 )              != EC_RES_WAITING::OK ) break;
                 if ( r1 != 1 ) break;
@@ -329,7 +330,7 @@ EC_SD_RESULT microsd_spi::wake_up ( void ) const {
     do {
         if ( ( this->type_microsd == EC_MICRO_SD_TYPE::SD_V1 ) |
              ( this->type_microsd == EC_MICRO_SD_TYPE::MMC_V3 ) ) {
-            for ( int loop = 0; loop < 1000; loop++ ) {
+            for ( int loop = 0; loop < 100; loop++ ) {
                 if ( this->send_cmd( CMD1, 0, 0 )        != EC_RES_WAITING::OK ) break;
                 if ( this->wait_r1( &r1 )                != EC_RES_WAITING::OK ) break;
                 if ( this->send_wait_one_package()       != EC_RES_WAITING::OK ) break;
@@ -343,7 +344,7 @@ EC_SD_RESULT microsd_spi::wake_up ( void ) const {
         }
 
         // Если тут, то V2+.
-        for ( int loop_acmd41 = 0; loop_acmd41 < 1000; loop_acmd41++ ) {
+        for ( int loop_acmd41 = 0; loop_acmd41 < 100; loop_acmd41++ ) {
             if ( this->send_acmd( ACMD41, 1 << 30, 0 )   != EC_RES_WAITING::OK ) break;
             if ( this->wait_r1( &r1 )                    != EC_RES_WAITING::OK ) break;
             if ( this->send_wait_one_package()           != EC_RES_WAITING::OK ) break;
