@@ -27,7 +27,7 @@ public:
 	EC_MICRO_SD_TYPE	get_type					( void )									const;
 	EC_SD_RESULT		wake_up						( void )									const;
 	EC_SD_RESULT		read_sector					( uint32_t sector, uint8_t *target_array )	const;
-	EC_SD_RESULT		write_sector				( uint8_t *source_array, uint32_t sector )	const;
+	EC_SD_RESULT		write_sector				( const uint8_t* const source_array, uint32_t sector )	const;
 	EC_SD_STATUS		send_status					( void )									const;
 
 private:

@@ -54,7 +54,7 @@ public:
 	virtual EC_SD_RESULT		read_sector			( uint32_t sector, uint8_t *target_array )		const = 0;
 
 	// Записать по адресу address массив src длинной 512 байт.
-	virtual EC_SD_RESULT		write_sector		( uint8_t *source_array, uint32_t sector )	const = 0;
+	virtual EC_SD_RESULT		write_sector		( const uint8_t* const source_array, uint32_t sector )	const = 0;
 
 	virtual EC_SD_STATUS		send_status			( void ) const = 0;
 };

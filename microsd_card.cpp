@@ -419,7 +419,7 @@ EC_SD_RESULT microsd_spi::read_sector ( uint32_t sector, uint8_t *target_array )
 }
 
 // Записать по адресу address массив src длинной 512 байт.
-EC_SD_RESULT microsd_spi::write_sector ( uint8_t *source_array, uint32_t sector ) const {
+EC_SD_RESULT microsd_spi::write_sector ( const uint8_t* const source_array, uint32_t sector ) const {
 	uint32_t address;
 
 	this->cfg->p_spi->set_prescaler( this->cfg->fast );
