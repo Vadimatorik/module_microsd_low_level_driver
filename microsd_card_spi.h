@@ -12,22 +12,14 @@ struct microsd_spi_cfg_t {
 	const uint32_t				fast;
 };
 
-enum class EC_SD_RES {
-	OK							= 0,
-	TIMEOUT						= 1,
-	IO_ERROR					= 2,					// Если низкоуровневый интерфейс (SDIO/SPI) не отработал.
-	R1_ILLEGAL_COMMAND			= 3,					// Команда не поддерживается.
-};
-
 class microsd_spi : public microsd_base {
 public:
 	microsd_spi ( const microsd_spi_cfg_t* const cfg );
 
 	EC_MICRO_SD_TYPE	initialize					( void )									const;
 	EC_MICRO_SD_TYPE	get_type					( void )									const;
-	EC_SD_RESULT		wake_up						( void )									const;
-	EC_SD_RESULT		read_sector					( uint32_t sector, uint8_t *target_array )	const;
-	EC_SD_RESULT		write_sector				( const uint8_t* const source_array, uint32_t sector )	const;
+	EC_SD_RESULT		read_sector					( uint32_t sector, uint8_t *target_array, uint32_t cout_sector, uint32_t timeout_ms  )	const;
+	EC_SD_RESULT		write_sector				( const uint8_t* const source_array, uint32_t sector, uint32_t cout_sector, uint32_t timeout_ms  )	const;
 	EC_SD_STATUS		send_status					( void )									const;
 
 private:

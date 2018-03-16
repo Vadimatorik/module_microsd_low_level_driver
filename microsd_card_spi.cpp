@@ -1,4 +1,4 @@
-#include "microsd_card.h"
+#include "microsd_card_spi.h"
 
 #define CMD0		( 0x40 )														  // Программный сброс.
 #define CMD1		( 0x40 + 1)													   // Инициировать процесс инициализации.
@@ -331,7 +331,7 @@ EC_SD_STATUS microsd_spi::send_status ( void ) const {
 
 		if ( res_r2	!= EC_SD_RES::OK ) {
 			USER_OS_GIVE_MUTEX( this->mutex );
-			this->wake_up();
+			this->initialize();
 			continue;
 		}
 	} while( 0 );
@@ -351,36 +351,14 @@ EC_MICRO_SD_TYPE microsd_spi::get_type ( void ) const {
 	return this->type_microsd;
 }
 
-// Не защищено мутексом.
-EC_SD_RESULT microsd_spi::wake_up ( void ) const {
-	EC_SD_RESULT r = EC_SD_RESULT::NOTRDY;
-	this->cfg->p_spi->set_prescaler( this->cfg->slow );
-
-	uint8_t r1;
-
-	do {
-		int l = 500;
-		for ( ; l != 0; l-- ) {
-			if ( this->send_acmd( ACMD41, ACMD41_HCS_MSK, 0 ) != EC_SD_RES::OK )	break;
-			if ( this->wait_r1( &r1 )			!= EC_SD_RES::OK )					break;
-			if ( r1 == 0 )															break;
-			USER_OS_DELAY_MS( 1 );
-		}
-	} while ( 0 );
-
-	if ( r1 == 0 ) {
-		this->cfg->p_spi->set_prescaler( this->cfg->fast );
-	}
-
-	return r;
-}
-
 // Считать сектор.
 // dst - указатель на массив, куда считать 512 байт.
 // sector - требуемый сектор, с 0.
 // Предполагается, что с картой все хорошо (она определена, инициализирована).
 
-EC_SD_RESULT microsd_spi::read_sector ( uint32_t sector, uint8_t *target_array ) const {
+EC_SD_RESULT microsd_spi::read_sector ( uint32_t sector, uint8_t *target_array, uint32_t cout_sector, uint32_t timeout_ms  ) const {
+	( void )timeout_ms;
+
 	uint32_t address;
 
 	this->cfg->p_spi->set_prescaler( this->cfg->fast );
@@ -390,9 +368,12 @@ EC_SD_RESULT microsd_spi::read_sector ( uint32_t sector, uint8_t *target_array )
 	if ( this->mutex != nullptr )
 		USER_OS_TAKE_MUTEX( this->mutex, portMAX_DELAY );
 
-	address = this->get_arg_address( sector );											  // В зависимости от типа карты - адресация может быть побайтовая или поблочная
-																							// (блок - 512 байт).
+	uint8_t* p_buf = target_array;
+
 	do {
+		address = this->get_arg_address( sector );											  // В зависимости от типа карты - адресация может быть побайтовая или поблочная
+																									// (блок - 512 байт).
+
 		if ( this->send_cmd( CMD17, address, 0 )	 != EC_SD_RES::OK ) break;		  // Отправляем CMD17.
 		uint8_t r1;
 		if ( this->wait_r1( &r1 )					!= EC_SD_RES::OK ) break;
@@ -402,13 +383,22 @@ EC_SD_RESULT microsd_spi::read_sector ( uint32_t sector, uint8_t *target_array )
 		// Считываем 512 байт.
 		this->cs_low();
 
-		if ( this->cfg->p_spi->rx( target_array, 512, 100, 0xFF )	  != BASE_RESULT::OK ) break;
+		if ( this->cfg->p_spi->rx( p_buf, 512, 100, 0xFF )	  != BASE_RESULT::OK ) break;
 		uint8_t crc_in[2] = {0xFF, 0xFF};
 
 		if ( this->cfg->p_spi->rx( crc_in, 2, 10, 0xFF )			   != BASE_RESULT::OK ) break;
 		if ( this->send_wait_one_package()		   != EC_SD_RES::OK ) break;
-		r = EC_SD_RESULT::OK;
-	}  while ( false );
+
+		if ( cout_sector == 0 ) {
+			r = EC_SD_RESULT::OK;
+			break;
+		} else {
+			sector++;							// Будем писать следующий сектор.
+			p_buf += 512;						// 512 байт уже записали.
+			cout_sector--;						// cout_sector 1 сектор записали.
+		}
+
+	}  while ( true );
 
 	this->cs_high();
 
@@ -419,7 +409,9 @@ EC_SD_RESULT microsd_spi::read_sector ( uint32_t sector, uint8_t *target_array )
 }
 
 // Записать по адресу address массив src длинной 512 байт.
-EC_SD_RESULT microsd_spi::write_sector ( const uint8_t* const source_array, uint32_t sector ) const {
+EC_SD_RESULT microsd_spi::write_sector ( const uint8_t* const source_array, uint32_t sector, uint32_t cout_sector, uint32_t timeout_ms  ) const {
+	( void )timeout_ms;
+
 	uint32_t address;
 
 	this->cfg->p_spi->set_prescaler( this->cfg->fast );
@@ -429,10 +421,12 @@ EC_SD_RESULT microsd_spi::write_sector ( const uint8_t* const source_array, uint
 	if ( this->mutex != nullptr )
 		USER_OS_TAKE_MUTEX( this->mutex, portMAX_DELAY );
 
-	address = this->get_arg_address( sector );	  // В зависимости от типа карты - адресация может быть побайтовая или поблочная
-													// (блок - 512 байт).
+	uint8_t* p_buf = ( uint8_t* )source_array;
 
 	do {
+		address = this->get_arg_address( sector );	  // В зависимости от типа карты - адресация может быть побайтовая или поблочная
+															// (блок - 512 байт).
+
 		if ( this->send_cmd( CMD24, address, 0 )				 != EC_SD_RES::OK ) break;				  // Отправляем CMD24.
 		uint8_t r1;
 		if ( this->wait_r1( &r1 )								!= EC_SD_RES::OK ) break;
@@ -443,7 +437,7 @@ EC_SD_RESULT microsd_spi::write_sector ( const uint8_t* const source_array, uint
 		// Пишем 512 байт.
 		this->cs_low();
 
-		if ( this->cfg->p_spi->tx( source_array, 512, 100 )	!= BASE_RESULT::OK )   break;
+		if ( this->cfg->p_spi->tx( p_buf, 512, 100 )	!= BASE_RESULT::OK )   break;
 		uint8_t crc_out[2] = { 0 };					  // Отправляем любой CRC.
 		if ( this->cfg->p_spi->tx( crc_out, 2, 100 )		   != BASE_RESULT::OK )   break;
 		// Сразу же должен прийти ответ - принята ли команда записи.
@@ -459,8 +453,17 @@ EC_SD_RESULT microsd_spi::write_sector ( const uint8_t* const source_array, uint
 		}
 		if ( write_wait == 0 ) break;
 		if ( this->send_wait_one_package() != EC_SD_RES::OK ) break;
-		r = EC_SD_RESULT::OK;
-	} while ( false );
+
+
+		if ( cout_sector == 0 ) {
+			r = EC_SD_RESULT::OK;
+			break;
+		} else {
+			sector++;							// Будем писать следующий сектор.
+			p_buf += 512;						// 512 байт уже записали.
+			cout_sector--;						// cout_sector 1 сектор записали.
+		}
+	} while ( true );
 
 	this->cs_high();
 

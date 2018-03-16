@@ -24,6 +24,13 @@ enum class EC_MICRO_SD_TYPE {
 	SDHC_OR_SDXC	= 3
 };
 
+enum class EC_SD_RES {
+	OK							= 0,
+	TIMEOUT						= 1,
+	IO_ERROR					= 2,					// Если низкоуровневый интерфейс (SDIO/SPI) не отработал.
+	R1_ILLEGAL_COMMAND			= 3,					// Команда не поддерживается.
+};
+
 class microsd_base {
 public:
 	//**********************************************************************
@@ -38,23 +45,13 @@ public:
 	//**********************************************************************
 	virtual EC_MICRO_SD_TYPE   get_type				( void ) const = 0;
 
-	//**********************************************************************
-	// Основываясь на ранее определенном типе (методом initialize)
-	// Производит пробуждение карты.
-	// Возвраащет:
-	// OK - в случае удачного пробуждения.
-	// NOTRDY - если не удалось.
-	// ERROR - ошибка интерфейса.
-	//**********************************************************************
-	virtual EC_SD_RESULT		wake_up				( void ) const = 0;
-
 	// Считать сектор: структура карты, указатель на первый байт, куда будут помещены данные.
 	// Адрес внутри microsd. В зависимости от карты: либо первого байта, откуда считать (выравнивание по 512 байт), либо адрес
 	// сектора (каждый сектор 512 байт).
-	virtual EC_SD_RESULT		read_sector			( uint32_t sector, uint8_t *target_array )		const = 0;
+	virtual EC_SD_RESULT		read_sector			( uint32_t sector, uint8_t *target_array, uint32_t cout_sector, uint32_t timeout_ms  )		const = 0;
 
 	// Записать по адресу address массив src длинной 512 байт.
-	virtual EC_SD_RESULT		write_sector		( const uint8_t* const source_array, uint32_t sector )	const = 0;
+	virtual EC_SD_RESULT		write_sector		( const uint8_t* const source_array, uint32_t sector, uint32_t cout_sector, uint32_t timeout_ms  )	const = 0;
 
 	virtual EC_SD_STATUS		send_status			( void ) const = 0;
 };
