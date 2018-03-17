@@ -13,6 +13,7 @@ microsd_sdio::microsd_sdio ( const microsd_sdio_cfg_t* const cfg ) : cfg( cfg ) 
 	this->handle.obj								= this;
 
 	/// DMA обязателен! На AT не рассматривается.
+
 	this->handle.hdmatx								= &this->hdma_tx;
 	this->handle.hdmatx->Instance					= this->cfg->dma_tx;
 	this->handle.hdmatx->Init.Channel				= this->cfg->dma_tx_ch;
@@ -67,28 +68,40 @@ void microsd_sdio::sdio_handler ( void ) {
 
 EC_MICRO_SD_TYPE microsd_sdio::initialize ( void ) const {
 	HAL_StatusTypeDef r;
-	dma_clk_on( this->cfg->dma_tx );
-	r = HAL_DMA_DeInit( &this->hdma_tx );
-	if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
-	r = HAL_DMA_Init( &this->hdma_tx );
-	if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
-	dma_clk_on( this->cfg->dma_rx );
-	r = HAL_DMA_DeInit( &this->hdma_rx );
-	if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
-	r = HAL_DMA_Init( &this->hdma_rx );
-	if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
 
-	dma_irq_on( this->cfg->dma_tx, 6 );
-	dma_irq_on( this->cfg->dma_rx, 6 );
+	if ( HAL_SD_GetState( &this->handle ) == HAL_SD_STATE_RESET ) {	/// Первый запуск.
 
-	NVIC_SetPriority( SDIO_IRQn, 6 );
-	NVIC_EnableIRQ( SDIO_IRQn );
+		dma_clk_on( this->cfg->dma_tx );
+		r = HAL_DMA_DeInit( &this->hdma_tx );
+		if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
+		r = HAL_DMA_Init( &this->hdma_tx );
+		if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
 
-	__HAL_RCC_SDIO_CLK_ENABLE();
+		dma_clk_on( this->cfg->dma_rx );
+		r = HAL_DMA_DeInit( &this->hdma_rx );
+		if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
+		r = HAL_DMA_Init( &this->hdma_rx );
+		if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
 
-	r = HAL_SD_Init( &this->handle );
-	if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
-	return this->get_type();
+		dma_irq_on( this->cfg->dma_tx, 6 );
+		dma_irq_on( this->cfg->dma_rx, 6 );
+
+		NVIC_SetPriority( SDIO_IRQn, 6 );
+		NVIC_EnableIRQ( SDIO_IRQn );
+
+		__HAL_RCC_SDIO_CLK_ENABLE();
+
+		r = HAL_SD_Init( &this->handle );
+		if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
+		r = HAL_SD_ConfigWideBusOperation( &this->handle, SDIO_BUS_WIDE_4B );
+		if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
+
+		return this->get_type();
+	} else {	/// Интерфейс уже настроен, надо карту.
+		r = HAL_SD_InitCard( &this->handle );
+		if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
+		return this->get_type();
+	}
 }
 
 EC_MICRO_SD_TYPE microsd_sdio::get_type ( void ) const {
@@ -129,14 +142,12 @@ EC_SD_RESULT microsd_sdio::write_sector ( const uint8_t* const source_array, uin
     xSemaphoreTake ( this->s, 0 );
 
 	HAL_StatusTypeDef r;
-	r = HAL_SD_WriteBlocks_DMA( &this->handle, (uint8_t*)source_array, sector, cout_sector );
+	r = HAL_SD_WriteBlocks_IT( &this->handle, (uint8_t*)source_array, sector, cout_sector );
 
 	if ( r == HAL_OK ) {
-
 		if ( xSemaphoreTake ( this->s, timeout_ms ) == pdTRUE ) {
 			rv = EC_SD_RESULT::OK;
 		}
-
 	}
 	if ( this->m != nullptr )			USER_OS_GIVE_MUTEX( this->m );
 
@@ -165,8 +176,15 @@ void HAL_SD_RxCpltCallback( SD_HandleTypeDef *hsd ) {
 }
 
 EC_SD_STATUS microsd_sdio::send_status ( void )  const {
-	//HAL_SD_StateTypeDef s = HAL_SD_GetState( &this->handle );
+	/// Отслеживаем первый запуск драйвера (аппаратный).
+	if ( HAL_SD_GetState( &this->handle ) == HAL_SD_STATE_RESET ) {
+		return EC_SD_STATUS::NOINIT;
+	}
 
-	/// Допилить, если будет надо.
-	return  EC_SD_STATUS::OK;
+	HAL_SD_CardStateTypeDef s = HAL_SD_GetCardState( &this->handle );
+	if ( s == HAL_SD_CARD_TRANSFER ) {
+		return  EC_SD_STATUS::OK;
+	} else {
+		return EC_SD_STATUS::NOINIT;
+	}
 }
