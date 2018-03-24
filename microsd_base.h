@@ -53,5 +53,5 @@ public:
 	// Записать по адресу address массив src длинной 512 байт.
 	virtual EC_SD_RESULT		write_sector		( const uint8_t* const source_array, uint32_t sector, uint32_t cout_sector, uint32_t timeout_ms  )	const = 0;
 
-	virtual EC_SD_STATUS		send_status			( void ) const = 0;
+	virtual EC_SD_STATUS		get_status			( void ) const = 0;
 };

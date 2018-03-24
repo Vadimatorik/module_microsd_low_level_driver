@@ -314,7 +314,7 @@ EC_MICRO_SD_TYPE microsd_spi::initialize ( void ) const {
 	return this->type_microsd;
 }
 
-EC_SD_STATUS microsd_spi::send_status ( void ) const {
+EC_SD_STATUS microsd_spi::get_status ( void ) const {
 	if ( this->get_type() == EC_MICRO_SD_TYPE::ERROR ) {
 		this->initialize();
 	}

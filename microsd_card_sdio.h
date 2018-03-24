@@ -17,10 +17,10 @@ struct microsd_sdio_cfg_t {
 	uint32_t					div;				/// IS_SDIO_CLKDIV( value ).
 
 	/// DMA обязателен.
-	DMA_Stream_TypeDef*         dma_tx;				/// Из мерии DMAx_Streamx.
 	DMA_Stream_TypeDef*         dma_rx;				/// Из мерии DMAx_Streamx.
-	uint32_t                    dma_tx_ch;			/// Из серии DMA_CHANNEL_x.
 	uint32_t                    dma_rx_ch;			/// Из серии DMA_CHANNEL_x.
+	uint8_t						dma_rx_irq_prio;	/// Если задан dma_rx.
+	uint8_t						sdio_irq_prio;		/// Задается если не указан dma_rx. Передача всегда идет в ручную (без DMA и IT).
 };
 
 
@@ -32,7 +32,7 @@ public:
 	EC_MICRO_SD_TYPE	get_type					( void )									const;
 	EC_SD_RESULT		read_sector					( uint32_t sector, uint8_t *target_array, uint32_t cout_sector, uint32_t timeout_ms  )	const;
 	EC_SD_RESULT		write_sector				( const uint8_t* const source_array, uint32_t sector, uint32_t cout_sector, uint32_t timeout_ms  )	const;
-	EC_SD_STATUS		send_status					( void ) const;
+	EC_SD_STATUS		get_status					( void ) const;
 
 	void dma_rx_handler ( void );
 	void dma_tx_handler ( void );
