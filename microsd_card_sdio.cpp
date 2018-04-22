@@ -29,11 +29,11 @@ MicrosdSdio::MicrosdSdio ( const microsd_sdio_cfg_t* const cfg ) : cfg( cfg ) {
 		this->handle.hdmarx->Init.MemBurst				= DMA_MBURST_INC4;
 		this->handle.hdmarx->Init.PeriphBurst			= DMA_PBURST_INC4;
 
-		this->handle.hdmarx->Parent                     = &this->handle;
+		this->handle.hdmarx->Parent					 = &this->handle;
 	}
 
-    this->m = USER_OS_STATIC_MUTEX_CREATE( &mb );
-    this->s = USER_OS_STATIC_BIN_SEMAPHORE_CREATE( &this->sb );
+	this->m = USER_OS_STATIC_MUTEX_CREATE( &mb );
+	this->s = USER_OS_STATIC_BIN_SEMAPHORE_CREATE( &this->sb );
 }
 
 void MicrosdSdio::dmaRxHandler ( void ) {
@@ -93,21 +93,21 @@ EC_MICRO_SD_TYPE MicrosdSdio::getType ( void ) {
 	}
 }
 
-EC_SD_RESULT MicrosdSdio::readSector ( uint32_t sector, uint8_t *target_array, uint32_t cout_sector, uint32_t timeout_ms  )	{
+EC_SD_RESULT MicrosdSdio::readSector ( uint32_t sector, uint8_t *target_array, uint32_t cout_sector, uint32_t timeout_ms )	{
 	USER_OS_TAKE_MUTEX( this->m, portMAX_DELAY );
 
 	EC_SD_RESULT rv = EC_SD_RESULT::ERROR;
 	HAL_StatusTypeDef r;
 
-    xSemaphoreTake ( this->s, 0 );
+	xSemaphoreTake ( this->s, 0 );
 
-    if ( this->cfg->dma_rx != nullptr ) {
-    	r = HAL_SD_ReadBlocks_DMA( &this->handle, target_array, sector, cout_sector );
-    } else {
-    	r = HAL_SD_ReadBlocks_IT( &this->handle, target_array, sector, cout_sector );
-    }
+	if ( this->cfg->dma_rx != nullptr ) {
+		r = HAL_SD_ReadBlocks_DMA( &this->handle, target_array, sector, cout_sector );
+	} else {
+		r = HAL_SD_ReadBlocks_IT( &this->handle, target_array, sector, cout_sector );
+	}
 
-    if ( r == HAL_OK ) {
+	if ( r == HAL_OK ) {
 		if ( xSemaphoreTake ( this->s, timeout_ms ) == pdTRUE ) {
 			rv = EC_SD_RESULT::OK;
 		};
@@ -123,7 +123,7 @@ EC_SD_RESULT MicrosdSdio::readSector ( uint32_t sector, uint8_t *target_array, u
 				rv = EC_SD_RESULT::ERROR;
 			}
 		}
-    }
+	}
 
 	USER_OS_GIVE_MUTEX( this->m );
 
@@ -137,11 +137,11 @@ EC_SD_RESULT MicrosdSdio::writeSector ( const uint8_t* const source_array, uint3
 	HAL_StatusTypeDef r;
 
 	__disable_irq();
-    r = HAL_SD_WriteBlocks( &this->handle, (uint8_t*)source_array, sector, cout_sector, timeout_ms );
-    __enable_irq();
+	r = HAL_SD_WriteBlocks( &this->handle, (uint8_t*)source_array, sector, cout_sector, timeout_ms );
+	__enable_irq();
 
-    if ( r == HAL_OK ) {
-    	rv = EC_SD_RESULT::OK;
+	if ( r == HAL_OK ) {
+		rv = EC_SD_RESULT::OK;
 		uint32_t timeout_flag = 1000;
 		while( timeout_flag ) {
 			if ( HAL_SD_GetCardState( &this->handle ) == HAL_SD_CARD_TRANSFER ) break;
@@ -150,7 +150,7 @@ EC_SD_RESULT MicrosdSdio::writeSector ( const uint8_t* const source_array, uint3
 		if ( timeout_flag == 0 ) {
 			rv = EC_SD_RESULT::ERROR;
 		}
-    }
+	}
 
 	USER_OS_GIVE_MUTEX( this->m );
 
@@ -158,17 +158,17 @@ EC_SD_RESULT MicrosdSdio::writeSector ( const uint8_t* const source_array, uint3
 }
 
 void MicrosdSdio::giveSemaphore ( void ) {
-    if ( this->s ) {
-        BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-        xSemaphoreGiveFromISR ( this->s, &xHigherPriorityTaskWoken);
-    }
+	if ( this->s ) {
+		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+		xSemaphoreGiveFromISR ( this->s, &xHigherPriorityTaskWoken);
+	}
 }
 
 extern "C" {
 
 void HAL_SD_RxCpltCallback( SD_HandleTypeDef *hsd ) {
 	MicrosdSdio* o = ( MicrosdSdio* )hsd->obj;
-    o->giveSemaphore();
+	o->giveSemaphore();
 }
 
 }
