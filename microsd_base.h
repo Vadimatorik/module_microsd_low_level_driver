@@ -4,10 +4,10 @@
 
 enum class EC_SD_RESULT {
 	OK		= 0,		// 0: Successful
-	ERROR   = 1,		// 1: R/W Error
-	WRPRT   = 2,		// 2: Write Protected
-	NOTRDY  = 3,		// 3: Not Ready
-	PARERR  = 4			// 4: Invalid Parameter
+	ERROR	= 1,		// 1: R/W Error
+	WRPRT	= 2,		// 2: Write Protected
+	NOTRDY	= 3,		// 3: Not Ready
+	PARERR	= 4			// 4: Invalid Parameter
 };
 
 enum class EC_SD_STATUS {
@@ -31,27 +31,33 @@ enum class EC_SD_RES {
 	R1_ILLEGAL_COMMAND			= 3,					// Команда не поддерживается.
 };
 
-class microsd_base {
+class MicrosdBase {
 public:
 	//**********************************************************************
 	// Метод:
 	// 1. Распознает тип карты.
 	// 2. Инициализирует ее в соответсвии с ее типом.
 	//**********************************************************************
-	virtual EC_MICRO_SD_TYPE   initialize		   ( void ) const = 0;
+	virtual EC_MICRO_SD_TYPE	initialize			( void )						= 0;
 
 	//**********************************************************************
 	// Метод возвращает тип карты, определенный initialize.
 	//**********************************************************************
-	virtual EC_MICRO_SD_TYPE   get_type				( void ) const = 0;
+	virtual EC_MICRO_SD_TYPE	getType				( void )						= 0;
 
 	// Считать сектор: структура карты, указатель на первый байт, куда будут помещены данные.
 	// Адрес внутри microsd. В зависимости от карты: либо первого байта, откуда считать (выравнивание по 512 байт), либо адрес
 	// сектора (каждый сектор 512 байт).
-	virtual EC_SD_RESULT		read_sector			( uint32_t sector, uint8_t *target_array, uint32_t cout_sector, uint32_t timeout_ms  )		const = 0;
+	virtual EC_SD_RESULT		readSector			( uint32_t sector,
+													  uint8_t *target_array,
+													  uint32_t cout_sector,
+													  uint32_t timeout_ms	)		= 0;
 
 	// Записать по адресу address массив src длинной 512 байт.
-	virtual EC_SD_RESULT		write_sector		( const uint8_t* const source_array, uint32_t sector, uint32_t cout_sector, uint32_t timeout_ms  )	const = 0;
+	virtual EC_SD_RESULT		writeSector			( const uint8_t* const source_array,
+													  uint32_t sector,
+													  uint32_t cout_sector,
+													  uint32_t timeout_ms	)		= 0;
 
-	virtual EC_SD_STATUS		get_status			( void ) const = 0;
+	virtual EC_SD_STATUS		getStatus			( void )						= 0;
 };

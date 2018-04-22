@@ -1,7 +1,7 @@
 #include "microsd_card_sdio.h"
 #include "dma.h"
 
-microsd_sdio::microsd_sdio ( const microsd_sdio_cfg_t* const cfg ) : cfg( cfg ) {
+MicrosdSdio::MicrosdSdio ( const microsd_sdio_cfg_t* const cfg ) : cfg( cfg ) {
 	this->handle.Instance						= SDIO;
 	this->handle.Init.ClockEdge					= SDIO_CLOCK_EDGE_RISING;
 	this->handle.Init.ClockBypass				= SDIO_CLOCK_BYPASS_DISABLE;
@@ -36,30 +36,30 @@ microsd_sdio::microsd_sdio ( const microsd_sdio_cfg_t* const cfg ) : cfg( cfg ) 
     this->s = USER_OS_STATIC_BIN_SEMAPHORE_CREATE( &this->sb );
 }
 
-void microsd_sdio::dma_rx_handler ( void ) {
+void MicrosdSdio::dmaRxHandler ( void ) {
 	HAL_DMA_IRQHandler( &this->hdma_rx );
 }
 
-void microsd_sdio::dma_tx_handler ( void ) {
+void MicrosdSdio::dmaTxHandler ( void ) {
 	HAL_DMA_IRQHandler( &this->hdma_tx );
 }
 
-void microsd_sdio::sdio_handler ( void ) {
+void MicrosdSdio::sdioHandler ( void ) {
 	HAL_SD_IRQHandler( &this->handle );
 }
 
-EC_MICRO_SD_TYPE microsd_sdio::initialize ( void ) const {
+EC_MICRO_SD_TYPE MicrosdSdio::initialize ( void ) {
 	HAL_StatusTypeDef r;
 
 	if ( HAL_SD_GetState( &this->handle ) == HAL_SD_STATE_RESET ) {		/// Первый запуск.
 		if (  this->cfg->dma_rx != nullptr ) {
-			dma_clk_on( this->cfg->dma_rx );
+			dmaClkOn( this->cfg->dma_rx );
 			r = HAL_DMA_DeInit( &this->hdma_rx );
 			if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
 			r = HAL_DMA_Init( &this->hdma_rx );
 			if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
 
-			dma_irq_on( this->cfg->dma_rx, this->cfg->dma_rx_irq_prio );
+			dmaIrqOn( this->cfg->dma_rx, this->cfg->dma_rx_irq_prio );
 		}
 
 		if ( this->cfg->dma_rx == nullptr ) {
@@ -76,15 +76,15 @@ EC_MICRO_SD_TYPE microsd_sdio::initialize ( void ) const {
 		r = HAL_SD_ConfigWideBusOperation( &this->handle, this->cfg->wide );
 		if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
 
-		return this->get_type();
+		return this->getType();
 	} else {	/// Интерфейс уже настроен, надо карту.
 		r = HAL_SD_InitCard( &this->handle );
 		if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
-		return this->get_type();
+		return this->getType();
 	}
 }
 
-EC_MICRO_SD_TYPE microsd_sdio::get_type ( void ) const {
+EC_MICRO_SD_TYPE MicrosdSdio::getType ( void ) {
 	switch ( this->handle.SdCard.CardType ) {
 		case CARD_SECURED:				return EC_MICRO_SD_TYPE::ERROR;
 		case CARD_SDSC:					return EC_MICRO_SD_TYPE::SDSC;
@@ -93,8 +93,8 @@ EC_MICRO_SD_TYPE microsd_sdio::get_type ( void ) const {
 	}
 }
 
-EC_SD_RESULT microsd_sdio::read_sector ( uint32_t sector, uint8_t *target_array, uint32_t cout_sector, uint32_t timeout_ms  )	const {
-	if ( this->m != nullptr )			USER_OS_TAKE_MUTEX( this->m, portMAX_DELAY );
+EC_SD_RESULT MicrosdSdio::readSector ( uint32_t sector, uint8_t *target_array, uint32_t cout_sector, uint32_t timeout_ms  )	{
+	USER_OS_TAKE_MUTEX( this->m, portMAX_DELAY );
 
 	EC_SD_RESULT rv = EC_SD_RESULT::ERROR;
 	HAL_StatusTypeDef r;
@@ -125,13 +125,13 @@ EC_SD_RESULT microsd_sdio::read_sector ( uint32_t sector, uint8_t *target_array,
 		}
     }
 
-	if ( this->m != nullptr )			USER_OS_GIVE_MUTEX( this->m );
+	USER_OS_GIVE_MUTEX( this->m );
 
 	return rv;
 }
 
-EC_SD_RESULT microsd_sdio::write_sector ( const uint8_t* const source_array, uint32_t sector, uint32_t cout_sector, uint32_t timeout_ms ) const {
-	if ( this->m != nullptr )			USER_OS_TAKE_MUTEX( this->m, portMAX_DELAY );
+EC_SD_RESULT MicrosdSdio::writeSector ( const uint8_t* const source_array, uint32_t sector, uint32_t cout_sector, uint32_t timeout_ms ) {
+	USER_OS_TAKE_MUTEX( this->m, portMAX_DELAY );
 
 	EC_SD_RESULT rv = EC_SD_RESULT::ERROR;
 	HAL_StatusTypeDef r;
@@ -152,12 +152,12 @@ EC_SD_RESULT microsd_sdio::write_sector ( const uint8_t* const source_array, uin
 		}
     }
 
-	if ( this->m != nullptr )			USER_OS_GIVE_MUTEX( this->m );
+	USER_OS_GIVE_MUTEX( this->m );
 
 	return rv;
 }
 
-void microsd_sdio::give_semaphore ( void ) {
+void MicrosdSdio::giveSemaphore ( void ) {
     if ( this->s ) {
         BaseType_t xHigherPriorityTaskWoken = pdFALSE;
         xSemaphoreGiveFromISR ( this->s, &xHigherPriorityTaskWoken);
@@ -167,13 +167,13 @@ void microsd_sdio::give_semaphore ( void ) {
 extern "C" {
 
 void HAL_SD_RxCpltCallback( SD_HandleTypeDef *hsd ) {
-	microsd_sdio* o = ( microsd_sdio* )hsd->obj;
-    o->give_semaphore();
+	MicrosdSdio* o = ( MicrosdSdio* )hsd->obj;
+    o->giveSemaphore();
 }
 
 }
 
-EC_SD_STATUS microsd_sdio::get_status ( void )  const {
+EC_SD_STATUS MicrosdSdio::getStatus ( void ) {
 	if ( this->handle.State == HAL_SD_STATE_RESET ) {
 		return  EC_SD_STATUS::NOINIT;
 	}
