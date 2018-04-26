@@ -274,7 +274,27 @@ EC_MICRO_SD_TYPE MicrosdSpi::initialize ( void ) {
 		res_op = this->waitR7( &r7 );
 		if ( ( res_op == EC_SD_RES::IO_ERROR ) || ( res_op == EC_SD_RES::TIMEOUT) )		break;
 		if ( res_op == EC_SD_RES::R1_ILLEGAL_COMMAND ) {
-			while(1);
+			int l = 500;
+			for ( ; l != 0; l-- ) {
+				if ( this->sendAcmd( ACMD41, 0, 0 ) != EC_SD_RES::OK )					break;
+				if ( this->waitR1( &r1 )			!= EC_SD_RES::OK )					break;
+				if ( r1 == 0 )															break;
+
+				/*!
+				 * Есть карты, которые по умолчании в режиме spi требуют CRC.
+				 * Шлем их нафиг.
+				 */
+				if ( r1 & 0b11111110 ) {
+					l = 0;
+					break;
+				}
+
+				USER_OS_DELAY_MS( 1 );
+			}
+
+			if ( !l ) 																	break;
+			this->typeMicrosd = EC_MICRO_SD_TYPE::SDSD;
+
 		} else {
 			// В ответ на CMD8 c параметром 1 ( 2.7-3.6 В ) + 0xAA (тестовое значение, выбранное на обум)
 			// должно прийти эхо ( параметр 1 и 0xAA ).
@@ -285,6 +305,15 @@ EC_MICRO_SD_TYPE MicrosdSpi::initialize ( void ) {
 				if ( this->sendAcmd( ACMD41, ACMD41_HCS_MSK, 0 ) != EC_SD_RES::OK )	break;
 				if ( this->waitR1( &r1 )			!= EC_SD_RES::OK )					break;
 				if ( r1 == 0 )															break;
+				/*!
+				 * Есть карты, которые несмотря на на CMD8 говорят,
+				 * что ACMD41 не поддерживается.
+				 * Такие шлем нафиг.
+				 */
+					if ( r1 & 0b11111110 ) {
+					l = 0;
+					break;
+				}
 				USER_OS_DELAY_MS( 1 );
 			}
 
