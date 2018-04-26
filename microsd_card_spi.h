@@ -8,8 +8,10 @@
 struct microsdSpiCfg {
 	PinBase*					const cs;			 // Вывод CS, подключенный к microsd.
 	SpiMaster8BitBase*			const s;
-	const uint32_t				slow;
-	const uint32_t				fast;
+
+	/// speed ( true == fast )
+	/// speed ( false == true )
+	void	( *setSpiSpeed )	( SpiMaster8BitBase* spi, bool speed );
 };
 
 class MicrosdSpi : public MicrosdBase {

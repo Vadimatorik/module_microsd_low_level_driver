@@ -264,7 +264,7 @@ EC_MICRO_SD_TYPE MicrosdSpi::initialize ( void ) {
 	uint32_t		r7;
 
 	USER_OS_TAKE_MUTEX( this->m, portMAX_DELAY );
-	this->cfg->s->setPrescaler( this->cfg->slow );
+	this->cfg->setSpiSpeed( this->cfg->s, false );
 	this->typeMicrosd = EC_MICRO_SD_TYPE::ERROR;
 
 	do {
@@ -335,7 +335,7 @@ EC_MICRO_SD_TYPE MicrosdSpi::initialize ( void ) {
 
 	// Теперь с SD можно работать на высоких скоростях.
 	if ( this->typeMicrosd != EC_MICRO_SD_TYPE::ERROR ) {
-		this->cfg->s->setPrescaler( this->cfg->fast );
+		this->cfg->setSpiSpeed( this->cfg->s, true );
 	}
 
 	USER_OS_GIVE_MUTEX( this->m );
@@ -351,7 +351,7 @@ EC_SD_STATUS MicrosdSpi::getStatus ( void ) {
 	uint16_t		r2;
 
 	USER_OS_TAKE_MUTEX( this->m, portMAX_DELAY );
-	this->cfg->s->setPrescaler( this->cfg->slow );
+	this->cfg->setSpiSpeed( this->cfg->s, false );
 	EC_SD_STATUS r = EC_SD_STATUS::NODISK;
 
 	do {
@@ -390,7 +390,7 @@ EC_SD_RESULT MicrosdSpi::readSector ( uint32_t sector, uint8_t *target_array, ui
 
 	uint32_t address;
 
-	this->cfg->s->setPrescaler( this->cfg->fast );
+	this->cfg->setSpiSpeed( this->cfg->s, true );
 
 	EC_SD_RESULT r = EC_SD_RESULT::ERROR;
 
@@ -442,7 +442,7 @@ EC_SD_RESULT MicrosdSpi::writeSector ( const uint8_t* const source_array, uint32
 
 	uint32_t address;
 
-	this->cfg->s->setPrescaler( this->cfg->fast );
+	this->cfg->setSpiSpeed( this->cfg->s, true );
 
 	EC_SD_RESULT r = EC_SD_RESULT::ERROR;
 
