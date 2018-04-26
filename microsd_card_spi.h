@@ -63,10 +63,10 @@ private:
 	// Принимаем r7.
 	EC_SD_RES	waitR7								( uint32_t* r7 );
 
-	const microsdSpiCfg*	const cfg;
+	const microsdSpiCfg*			const cfg;
 
-	mutable USER_OS_STATIC_MUTEX_BUFFER	 mutex_buf;
-	mutable USER_OS_STATIC_MUTEX			mutex			 = nullptr;
+	USER_OS_STATIC_MUTEX_BUFFER		mb;
+	USER_OS_STATIC_MUTEX			m				= nullptr;
 
-	mutable EC_MICRO_SD_TYPE				type_microsd	= EC_MICRO_SD_TYPE::ERROR;			 // Тип microSD.
+	EC_MICRO_SD_TYPE				typeMicrosd		= EC_MICRO_SD_TYPE::ERROR;			 // Тип microSD.
 };

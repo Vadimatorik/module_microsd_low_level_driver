@@ -17,7 +17,7 @@
 
 
 MicrosdSpi::MicrosdSpi ( const microsdSpiCfg* const cfg ) : cfg( cfg ) {
-	this->mutex = USER_OS_STATIC_MUTEX_CREATE( &this->mutex_buf );
+	this->m = USER_OS_STATIC_MUTEX_CREATE( &this->mb );
 }
 
 //**********************************************************************
@@ -242,7 +242,7 @@ EC_SD_RES MicrosdSpi::sendAcmd ( uint8_t acmd, uint32_t arg, uint8_t crc ) {
 // Иначе говоря, в зависимости от типа адресации либо возвращает тот же номер сектора,
 // либо номер первого байта.
 uint32_t MicrosdSpi::getArgAddress ( uint32_t sector ) {
-	if ( ( this->type_microsd == EC_MICRO_SD_TYPE::SDSC ) || ( this->type_microsd == EC_MICRO_SD_TYPE::SDSD ) ) {
+	if ( ( this->typeMicrosd == EC_MICRO_SD_TYPE::SDSC ) || ( this->typeMicrosd == EC_MICRO_SD_TYPE::SDSD ) ) {
 		return 0x200 * sector;
 	} else {
 		return sector;
@@ -263,9 +263,9 @@ EC_MICRO_SD_TYPE MicrosdSpi::initialize ( void ) {
 	uint8_t			r1;
 	uint32_t		r7;
 
-	if ( this->mutex != nullptr )			USER_OS_TAKE_MUTEX( this->mutex, portMAX_DELAY );
+	USER_OS_TAKE_MUTEX( this->m, portMAX_DELAY );
 	this->cfg->s->setPrescaler( this->cfg->slow );
-	this->type_microsd = EC_MICRO_SD_TYPE::ERROR;
+	this->typeMicrosd = EC_MICRO_SD_TYPE::ERROR;
 
 	do {
 		if ( this->sendCmd( CMD0, 0, 0x95 )		!= EC_SD_RES::OK )					break;				// Программный сброс.
@@ -295,9 +295,9 @@ EC_MICRO_SD_TYPE MicrosdSpi::initialize ( void ) {
 			res_op = this->waitR3( &ocr );
 			if ( res_op != EC_SD_RES::OK )												break;
 			if ( ocr & OCR_CCS_MSK ) {
-				this->type_microsd = EC_MICRO_SD_TYPE::SDHC_OR_SDXC;
+				this->typeMicrosd = EC_MICRO_SD_TYPE::SDHC_OR_SDXC;
 			} else {
-				this->type_microsd = EC_MICRO_SD_TYPE::SDSD;
+				this->typeMicrosd = EC_MICRO_SD_TYPE::SDSD;
 			}
 
 		}
@@ -305,23 +305,23 @@ EC_MICRO_SD_TYPE MicrosdSpi::initialize ( void ) {
 	} while ( false );
 
 	// Теперь с SD можно работать на высоких скоростях.
-	if ( this->type_microsd != EC_MICRO_SD_TYPE::ERROR ) {
+	if ( this->typeMicrosd != EC_MICRO_SD_TYPE::ERROR ) {
 		this->cfg->s->setPrescaler( this->cfg->fast );
 	}
 
-	if ( this->mutex != nullptr )			USER_OS_GIVE_MUTEX( this->mutex );
+	USER_OS_GIVE_MUTEX( this->m );
 
-	return this->type_microsd;
+	return this->typeMicrosd;
 }
 
 EC_SD_STATUS MicrosdSpi::getStatus ( void ) {
 	if ( this->getType() == EC_MICRO_SD_TYPE::ERROR ) {
-		this->initialize();
+		return EC_SD_STATUS::NOINIT;
 	}
 
 	uint16_t		r2;
 
-	if ( this->mutex != nullptr )			USER_OS_TAKE_MUTEX( this->mutex, portMAX_DELAY );
+	USER_OS_TAKE_MUTEX( this->m, portMAX_DELAY );
 	this->cfg->s->setPrescaler( this->cfg->slow );
 	EC_SD_STATUS r = EC_SD_STATUS::NODISK;
 
@@ -330,7 +330,7 @@ EC_SD_STATUS MicrosdSpi::getStatus ( void ) {
 		EC_SD_RES res_r2 = this->waitR2( &r2 );
 
 		if ( res_r2	!= EC_SD_RES::OK ) {
-			USER_OS_GIVE_MUTEX( this->mutex );
+			USER_OS_GIVE_MUTEX( this->m );
 			this->initialize();
 			continue;
 		}
@@ -342,13 +342,13 @@ EC_SD_STATUS MicrosdSpi::getStatus ( void ) {
 		r = EC_SD_STATUS::OK;
 	}
 
-	if ( this->mutex != nullptr )			USER_OS_GIVE_MUTEX( this->mutex );
+	USER_OS_GIVE_MUTEX( this->m );
 
 	return r;
 }
 
 EC_MICRO_SD_TYPE MicrosdSpi::getType ( void ) {
-	return this->type_microsd;
+	return this->typeMicrosd;
 }
 
 // Считать сектор.
@@ -365,8 +365,8 @@ EC_SD_RESULT MicrosdSpi::readSector ( uint32_t sector, uint8_t *target_array, ui
 
 	EC_SD_RESULT r = EC_SD_RESULT::ERROR;
 
-	if ( this->mutex != nullptr )
-		USER_OS_TAKE_MUTEX( this->mutex, portMAX_DELAY );
+
+	USER_OS_TAKE_MUTEX( this->m, portMAX_DELAY );
 
 	uint8_t* p_buf = target_array;
 
@@ -402,8 +402,7 @@ EC_SD_RESULT MicrosdSpi::readSector ( uint32_t sector, uint8_t *target_array, ui
 
 	this->csHigh();
 
-	if ( this->mutex != nullptr )
-		USER_OS_GIVE_MUTEX( this->mutex );
+	USER_OS_GIVE_MUTEX( this->m );
 
 	return r;
 }
@@ -418,8 +417,7 @@ EC_SD_RESULT MicrosdSpi::writeSector ( const uint8_t* const source_array, uint32
 
 	EC_SD_RESULT r = EC_SD_RESULT::ERROR;
 
-	if ( this->mutex != nullptr )
-		USER_OS_TAKE_MUTEX( this->mutex, portMAX_DELAY );
+	USER_OS_TAKE_MUTEX( this->m, portMAX_DELAY );
 
 	uint8_t* p_buf = ( uint8_t* )source_array;
 
@@ -467,8 +465,7 @@ EC_SD_RESULT MicrosdSpi::writeSector ( const uint8_t* const source_array, uint32
 
 	this->csHigh();
 
-	if ( this->mutex != nullptr )
-		USER_OS_GIVE_MUTEX( this->mutex );
+	USER_OS_GIVE_MUTEX( this->m );
 
 	return r;
 }
