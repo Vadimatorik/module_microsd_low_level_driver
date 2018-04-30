@@ -18,11 +18,16 @@ enum class EC_SD_STATUS {
 };
 
 enum class EC_MICRO_SD_TYPE {
-	ERROR			= 0,
-	SDSC			= 1,
-	SDSD			= 2,
-	SDHC_OR_SDXC	= 3
+	ERROR			=	0,
+	MMC				=	0x01,																			// MMC ver 3.
+	SD1				=	0x02,																			// SD ver 1.
+	SD2				=	0x04,																			// SD ver 2.
+	SDC				=	( uint32_t )( EC_MICRO_SD_TYPE::SD1 | ( uint32_t )EC_MICRO_SD_TYPE::SD2 ),		// SD.
+	BLOCK			=	0x08																			// Block addressing.
 };
+
+
+
 
 enum class EC_SD_RES {
 	OK							= 0,
@@ -62,5 +67,12 @@ public:
 													  uint32_t cout_sector,
 													  uint32_t timeout_ms	)		= 0;
 
+	// Возвращает текущее состаяние карты.
 	virtual EC_SD_STATUS		getStatus			( void )						= 0;
+
+	/// Запрашивает количество секторов на карте.
+	virtual	EC_SD_RESULT		getSectorCount		( uint32_t& sectorCount )		= 0;
+
+	/// Размер блока.
+	virtual	EC_SD_RESULT		getBlockSize		( uint32_t& blockSize )			= 0;
 };
