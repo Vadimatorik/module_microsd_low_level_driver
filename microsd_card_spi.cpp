@@ -1,23 +1,28 @@
 #include "microsd_card_spi.h"
 
-#define CMD0		( 0x40 )														  // Программный сброс.
-#define CMD1		( 0x40 + 1)													   // Инициировать процесс инициализации.
-#define CMD8		( 0x40 + 8 )													  // Уточнить поддерживаемое нарпряжение.
-#define CMD13		( 0x40 + 13 )														// Статус карты, если вставлена.
-#define CMD17	   ( 0x40 + 17 )													 // Считать блок.
-#define CMD24	   ( 0x40 + 24 )													 // Записать блок.
-#define CMD55	   ( 0x40 + 55 )													 // Указание, что далее ACMD.
-#define CMD58	   ( 0x40 + 58 )													 // Считать OCR регистр карты.
+#define CMD0		( 0x40 )														// Программный сброс.
+#define CMD1		( 0x40 + 1)														// Инициировать процесс инициализации.
+#define CMD8		( 0x40 + 8 )													// Уточнить поддерживаемое нарпряжение.
+#define CMD9		( 0x40 + 9 )													// Спрашивает у карты её информацию "о карте" (CSD).
 
-#define ACMD41	  ( 0x40 + 41 )													 // Инициировать процесс инициализации.
-#define ACMD55	  ( 0x40 + 55 )													 // Инициировать процесс инициализации.
+#define CMD13		( 0x40 + 13 )													// Статус карты, если вставлена.
+#define CMD16		( 0x40 + 16 )													// Размер физического блока.
+#define CMD17		( 0x40 + 17 )													// Считать блок.
+#define CMD24		( 0x40 + 24 )													// Записать блок.
+#define CMD55		( 0x40 + 55 )													// Указание, что далее ACMD.
+#define CMD58		( 0x40 + 58 )													// Считать OCR регистр карты.
 
-#define CMD17_MARK  ( 0b11111110 )
-#define CMD24_MARK  ( 0b11111110 )
+#define ACMD13		( 0x40 + 13 )													// Статус карты.
+#define ACMD41		( 0x40 + 41 )													// Инициировать процесс инициализации.
+#define ACMD55		( 0x40 + 55 )													// Инициировать процесс инициализации.
+
+#define CMD17_MARK	( 0b11111110 )
+#define CMD24_MARK	( 0b11111110 )
 
 
 MicrosdSpi::MicrosdSpi ( const microsdSpiCfg* const cfg ) : cfg( cfg ) {
 	this->m = USER_OS_STATIC_MUTEX_CREATE( &this->mb );
+	this->generateCrcTable();
 }
 
 //**********************************************************************
@@ -34,8 +39,19 @@ void MicrosdSpi::csHigh ( void ) {
 }
 
 // Передать count 0xFF.
-EC_SD_RES MicrosdSpi::sendEmptyPackage ( uint16_t count ) {
+EC_SD_RES MicrosdSpi::sendEmptyPackage ( const uint16_t count ) {
 	if ( this->cfg->s->txOneItem( 0xFF, count, 10 ) == BASE_RESULT::OK ) {
+		return EC_SD_RES::OK;
+	} else {
+		return EC_SD_RES::IO_ERROR;
+	}
+}
+
+EC_SD_RES MicrosdSpi::readDataPackage ( uint8_t* buf, const uint16_t count ) {
+	this->csLow();
+	BASE_RESULT r = this->cfg->s->rx( buf, count, 10, 0xFF );
+	this->csHigh();
+	if ( r == BASE_RESULT::OK ) {
 		return EC_SD_RES::OK;
 	} else {
 		return EC_SD_RES::IO_ERROR;
@@ -53,11 +69,11 @@ EC_SD_RES MicrosdSpi::sendWaitOnePackage ( void ) {
 // Ждем от карты "маркер"
 // - специальный байт, показывающий, что далее идет команда/данные.
 EC_SD_RES MicrosdSpi::waitMark ( uint8_t mark ) {
-	EC_SD_RES  r = EC_SD_RES::TIMEOUT;
+	EC_SD_RES	r = EC_SD_RES::TIMEOUT;
 
 	this->csLow();
 
-	for ( int l_d = 0; l_d < 3; l_d++ ) {											   // До 3 мс даем возможность карте ответить.
+	for ( int l_d = 0; l_d < 3; l_d++ ) {												// До 3 мс даем возможность карте ответить.
 		for ( int loop = 0; loop < 10; loop++ ) {
 			uint8_t input_buf;
 
@@ -126,7 +142,7 @@ EC_SD_RES MicrosdSpi::sendMark ( uint8_t mark ) {
 // Ожидаем R1 (значение R1 нам не нужно).
 EC_SD_RES MicrosdSpi::waitR1 ( uint8_t* r1 ) {
 	this->csLow();
-	EC_SD_RES  r = EC_SD_RES::TIMEOUT;
+	EC_SD_RES	r = EC_SD_RES::TIMEOUT;
 
 	// Карта должна принять команду в течении 3 обращений (чаще всего на 2-й итерации).
 	for ( int loop = 0; loop < 3; loop++ ) {
@@ -221,18 +237,49 @@ EC_SD_RES MicrosdSpi::waitR2 ( uint16_t* r2 ) {
 
 // Ждем ответа r7.
 EC_SD_RES MicrosdSpi::waitR7 ( uint32_t* r7 ) {
-	return this->waitR3( r7 );   // Структура r3 и r7 идентичны по формату. Так экономим память.
+	return this->waitR3( r7 );	// Структура r3 и r7 идентичны по формату. Так экономим память.
+}
+
+void MicrosdSpi::generateCrcTable( void ) {
+	int i, j;
+	uint8_t CRCPoly = 0x89;	// the value of our CRC-7 polynomial
+
+	// generate a table value for all 256 possible byte values
+	for (i = 0; i < 256; ++i) {
+	this->CRCTable[i] = (i & 0x80) ? i ^ CRCPoly : i;
+	for (j = 1; j < 8; ++j) {
+		this->CRCTable[i] <<= 1;
+		if ( this->CRCTable[i] & 0x80 )
+			this->CRCTable[i] ^= CRCPoly;
+	}
+	}
+}
+
+uint8_t MicrosdSpi::getCrc7 ( const uint8_t cmd, const uint32_t commandData ) {
+	uint8_t CRC = 0;
+
+	CRC = CRCTable[(CRC << 1) ^ cmd];
+
+	uint8_t* message = ( uint8_t* )&commandData;
+
+	for ( int i = 0; i < 4; ++i )
+		CRC = CRCTable[(CRC << 1) ^ message[ 3 - i ]];
+
+	CRC = ( CRC << 1 ) | 1;
+	return CRC;
 }
 
 // Передаем CMD55,
 // Дожидаемся сообщения об успешном принятии.
 // Если не удалось принять - информируем об ошибке и выходим.
 EC_SD_RES MicrosdSpi::sendAcmd ( uint8_t acmd, uint32_t arg, uint8_t crc ) {
-	EC_SD_RES r = this->sendCmd( CMD55, 0, 0 );
-	if ( r != EC_SD_RES::OK )			  return r;
+	EC_SD_RES r = this->sendCmd( CMD55, 0, this->getCrc7( CMD55, 0 ) );
+	if ( r != EC_SD_RES::OK )				return r;
 
-	r = this->waitR1();
-	if ( r != EC_SD_RES::OK )			  return r;
+	uint8_t r1;
+	r = this->waitR1( &r1 );
+	if ( r != EC_SD_RES::OK )				return r;
+	if ( r1 & ~(0x01) )						return EC_SD_RES::R1_ILLEGAL_COMMAND;
 
 	r = this->sendCmd( acmd, arg, crc );
 	return r;
@@ -242,11 +289,9 @@ EC_SD_RES MicrosdSpi::sendAcmd ( uint8_t acmd, uint32_t arg, uint8_t crc ) {
 // Иначе говоря, в зависимости от типа адресации либо возвращает тот же номер сектора,
 // либо номер первого байта.
 uint32_t MicrosdSpi::getArgAddress ( uint32_t sector ) {
-	if ( ( this->typeMicrosd == EC_MICRO_SD_TYPE::SDSC ) || ( this->typeMicrosd == EC_MICRO_SD_TYPE::SDSD ) ) {
-		return 0x200 * sector;
-	} else {
-		return sector;
-	}
+	if ( !( ( uint32_t )this->typeMicrosd & ( uint32_t )EC_MICRO_SD_TYPE::BLOCK ) )
+		sector *= 512;
+	return sector;
 }
 
 //**********************************************************************
@@ -256,82 +301,132 @@ uint32_t MicrosdSpi::getArgAddress ( uint32_t sector ) {
 #define R1_IN_IDLE_STATE_MSK				( 1 << 0 )
 #define ACMD41_HCS_MSK						( 1 << 30 )
 #define OCR_CCS_MSK							( 1 << 30 )
+
 // Определяем тип карты и инициализируем ее.
 EC_MICRO_SD_TYPE MicrosdSpi::initialize ( void ) {
-	EC_SD_RES res_op;
-
 	uint8_t			r1;
-	uint32_t		r7;
+	EC_SD_RES		sendResult;
 
 	USER_OS_TAKE_MUTEX( this->m, portMAX_DELAY );
 	this->cfg->setSpiSpeed( this->cfg->s, false );
 	this->typeMicrosd = EC_MICRO_SD_TYPE::ERROR;
 
-	do {
-		if ( this->sendCmd( CMD0, 0, 0x95 )		!= EC_SD_RES::OK )					break;				// Программный сброс.
-		if ( this->waitR1()						!= EC_SD_RES::OK )					break;				// Значение R1 не важно.
-		if ( this->sendCmd( CMD8, 0x1AA, 0x87 )	!= EC_SD_RES::OK )					break;				// 2.7-3.6 В.
-		res_op = this->waitR7( &r7 );
-		if ( ( res_op == EC_SD_RES::IO_ERROR ) || ( res_op == EC_SD_RES::TIMEOUT) )		break;
-		if ( res_op == EC_SD_RES::R1_ILLEGAL_COMMAND ) {
-			int l = 500;
-			for ( ; l != 0; l-- ) {
-				if ( this->sendAcmd( ACMD41, 0, 0 ) != EC_SD_RES::OK )					break;
-				if ( this->waitR1( &r1 )			!= EC_SD_RES::OK )					break;
-				if ( r1 == 0 )															break;
+	this->sendEmptyPackage( 10 );
 
-				/*!
-				 * Есть карты, которые по умолчании в режиме spi требуют CRC.
-				 * Шлем их нафиг.
-				 */
-				if ( r1 & 0b11111110 ) {
-					l = 0;
+	do {
+		if ( this->sendCmd( CMD0, 0, 0x95 )		!= EC_SD_RES::OK )					break;
+		if ( this->waitR1()						!= EC_SD_RES::OK )					break;
+		if ( this->sendCmd( CMD8, 0x1AA, 0x87 )	!= EC_SD_RES::OK )					break;
+
+		if ( this->waitR1( &r1 )				!= EC_SD_RES::OK )					break;
+
+		uint32_t timer = 300;
+
+		/// CMD8 поддерживается.
+		if ( !( r1 & R1_ILLEGAL_COMMAND_MSK ) ) {
+			uint8_t	ocr[4];
+			if ( this->readDataPackage( ocr, 4 ) != EC_SD_RES::OK )					break;
+			if ( !( ocr[2] == 0x01 && ocr[3] == 0xAA ) )							break;
+
+			while ( timer ) {
+				sendResult = this->sendAcmd( ACMD41, 1UL << 30, this->getCrc7( ACMD41, 1UL << 30 ) );
+				if ( sendResult != EC_SD_RES::OK ) {
+					timer = 0;
 					break;
 				}
 
-				USER_OS_DELAY_MS( 1 );
+				if ( this->waitR1( &r1 ) != EC_SD_RES::OK ) {
+					timer = 0;
+					break;
+				}
+
+				timer--;
+
+				if ( r1 == 0 ) {
+					break;
+				}
 			}
 
-			if ( !l ) 																	break;
-			this->typeMicrosd = EC_MICRO_SD_TYPE::SDSD;
+			if ( timer == 0 ) break;
+
+			sendResult = this->sendCmd( CMD58, 0, this->getCrc7( CMD58, 0 ) );
+			if ( this->waitR1( &r1 ) != EC_SD_RES::OK ) {
+				timer = 0;
+				break;
+			}
+
+			if ( this->readDataPackage( ocr, 4 ) != EC_SD_RES::OK ) {
+				timer = 0;
+				break;
+			}
+
+			if ( ocr[0] & 0x40 ) {
+				this->typeMicrosd = ( EC_MICRO_SD_TYPE )( ( uint32_t )EC_MICRO_SD_TYPE::SD2 | ( uint32_t )EC_MICRO_SD_TYPE::BLOCK );
+			} else {
+				this->typeMicrosd = EC_MICRO_SD_TYPE::SD2;
+			}
 
 		} else {
-			// В ответ на CMD8 c параметром 1 ( 2.7-3.6 В ) + 0xAA (тестовое значение, выбранное на обум)
-			// должно прийти эхо ( параметр 1 и 0xAA ).
-			if ( r7 != 0x1AA )															break;
+			sendResult = this->sendAcmd( ACMD41, 1UL << 30, this->getCrc7( ACMD41, 1UL << 30 ) );
+			if ( sendResult != EC_SD_RES::R1_ILLEGAL_COMMAND ) {
+				this->typeMicrosd = EC_MICRO_SD_TYPE::SD1;
+				while ( timer ) {
+					sendResult = this->sendAcmd( ACMD41, 0, this->getCrc7( ACMD41, 0 ) );
 
-			int l = 500;
-			for ( ; l != 0; l-- ) {
-				if ( this->sendAcmd( ACMD41, ACMD41_HCS_MSK, 0 ) != EC_SD_RES::OK )	break;
-				if ( this->waitR1( &r1 )			!= EC_SD_RES::OK )					break;
-				if ( r1 == 0 )															break;
-				/*!
-				 * Есть карты, которые несмотря на на CMD8 говорят,
-				 * что ACMD41 не поддерживается.
-				 * Такие шлем нафиг.
-				 */
-					if ( r1 & 0b11111110 ) {
-					l = 0;
-					break;
+					if ( sendResult != EC_SD_RES::OK ) {
+						timer = 0;
+						break;
+					}
+
+					if ( this->waitR1( &r1 ) != EC_SD_RES::OK ) {
+						timer = 0;
+						break;
+					}
+
+					if ( r1 != 0 ) {
+						continue;
+					}
+
+					timer--;
 				}
-				USER_OS_DELAY_MS( 1 );
-			}
 
-			if ( !l ) 																	break;				// Закончились попытки инициализировать.
+				if ( timer == 0 ) break;
 
-			if ( this->sendCmd( CMD58, 0, 0 )		!= EC_SD_RES::OK )					break;
-			uint32_t ocr;
-			res_op = this->waitR3( &ocr );
-			if ( res_op != EC_SD_RES::OK )												break;
-			if ( ocr & OCR_CCS_MSK ) {
-				this->typeMicrosd = EC_MICRO_SD_TYPE::SDHC_OR_SDXC;
+
 			} else {
-				this->typeMicrosd = EC_MICRO_SD_TYPE::SDSD;
+				this->typeMicrosd = EC_MICRO_SD_TYPE::MMC;
+
+				while ( timer ) {
+					EC_SD_RES	sendResult;
+					sendResult = this->sendCmd( CMD1, 0, this->getCrc7( CMD1, 0 ) );
+
+					if ( sendResult != EC_SD_RES::OK ) {
+						timer = 0;
+						break;
+					}
+
+					if ( this->waitR1( &r1 ) != EC_SD_RES::OK ) {
+						timer = 0;
+						break;
+					}
+
+					timer--;
+
+					if ( r1 != 0 ) {
+						continue;
+					}
+				}
+
+				if ( timer == 0 ) break;
 			}
 
+			if ( this->sendCmd( CMD16, 0, this->getCrc7( CMD16, 0 ) ) != EC_SD_RES::OK ) break;
+			if ( this->waitR1() != EC_SD_RES::OK ) {
+				this->typeMicrosd = EC_MICRO_SD_TYPE::ERROR;
+				break;
+			}
 		}
-
-	} while ( false );
+	} while( 0 );
 
 	// Теперь с SD можно работать на высоких скоростях.
 	if ( this->typeMicrosd != EC_MICRO_SD_TYPE::ERROR ) {
@@ -348,32 +443,20 @@ EC_SD_STATUS MicrosdSpi::getStatus ( void ) {
 		return EC_SD_STATUS::NOINIT;
 	}
 
-	uint16_t		r2;
-
-	USER_OS_TAKE_MUTEX( this->m, portMAX_DELAY );
-	this->cfg->setSpiSpeed( this->cfg->s, false );
-	EC_SD_STATUS r = EC_SD_STATUS::NODISK;
-
-	do {
-		if ( this->sendCmd( CMD13, 0, 0 )	!= EC_SD_RES::OK )					break;
-		EC_SD_RES res_r2 = this->waitR2( &r2 );
-
-		if ( res_r2	!= EC_SD_RES::OK ) {
-			USER_OS_GIVE_MUTEX( this->m );
-			this->initialize();
-			continue;
-		}
-	} while( 0 );
-
-	if ( r2 & ( R1_IN_IDLE_STATE_MSK << 8 ) ) {
-		r = EC_SD_STATUS::NOINIT;
-	} else {
-		r = EC_SD_STATUS::OK;
+	if ( this->sendCmd( CMD1, 0, this->getCrc7( CMD0, 0 ) )	!= EC_SD_RES::OK ) {
+		return EC_SD_STATUS::NOINIT;
 	}
 
-	USER_OS_GIVE_MUTEX( this->m );
+	uint8_t r1;
+	if ( this->waitR1( &r1 )	!= EC_SD_RES::OK ) {
+		return EC_SD_STATUS::NOINIT;
+	}
 
-	return r;
+	if ( r1 != 0 ) {
+		return EC_SD_STATUS::NOINIT;
+	}
+
+	return EC_SD_STATUS::OK;
 }
 
 EC_MICRO_SD_TYPE MicrosdSpi::getType ( void ) {
@@ -385,7 +468,7 @@ EC_MICRO_SD_TYPE MicrosdSpi::getType ( void ) {
 // sector - требуемый сектор, с 0.
 // Предполагается, что с картой все хорошо (она определена, инициализирована).
 
-EC_SD_RESULT MicrosdSpi::readSector ( uint32_t sector, uint8_t *target_array, uint32_t cout_sector, uint32_t timeout_ms  ) {
+EC_SD_RESULT MicrosdSpi::readSector ( uint32_t sector, uint8_t *target_array, uint32_t cout_sector, uint32_t timeout_ms	) {
 	( void )timeout_ms;
 
 	uint32_t address;
@@ -400,23 +483,23 @@ EC_SD_RESULT MicrosdSpi::readSector ( uint32_t sector, uint8_t *target_array, ui
 	uint8_t* p_buf = target_array;
 
 	do {
-		address = this->getArgAddress( sector );											  // В зависимости от типа карты - адресация может быть побайтовая или поблочная
-																									// (блок - 512 байт).
+		address = this->getArgAddress( sector );									// В зависимости от типа карты - адресация может быть побайтовая или поблочная
+																					// (блок - 512 байт).
 
-		if ( this->sendCmd( CMD17, address, 0 )	 != EC_SD_RES::OK ) break;		  // Отправляем CMD17.
+		if ( this->sendCmd( CMD17, address, this->getCrc7( CMD17, address ) )	 != EC_SD_RES::OK ) break;			// Отправляем CMD17.
 		uint8_t r1;
 		if ( this->waitR1( &r1 )					!= EC_SD_RES::OK ) break;
 		if ( r1 != 0 ) break;
-		if ( this->waitMark( CMD17_MARK )		   != EC_SD_RES::OK ) break;
+		if ( this->waitMark( CMD17_MARK )			!= EC_SD_RES::OK ) break;
 
 		// Считываем 512 байт.
 		this->csLow();
 
-		if ( this->cfg->s->rx( p_buf, 512, 100, 0xFF )	  != BASE_RESULT::OK ) break;
+		if ( this->cfg->s->rx( p_buf, 512, 100, 0xFF )		!= BASE_RESULT::OK ) break;
 		uint8_t crc_in[2] = {0xFF, 0xFF};
 
-		if ( this->cfg->s->rx( crc_in, 2, 10, 0xFF )			   != BASE_RESULT::OK ) break;
-		if ( this->sendWaitOnePackage()		   != EC_SD_RES::OK ) break;
+		if ( this->cfg->s->rx( crc_in, 2, 10, 0xFF )				!= BASE_RESULT::OK ) break;
+		if ( this->sendWaitOnePackage()			!= EC_SD_RES::OK ) break;
 
 		if ( cout_sector == 0 ) {
 			r = EC_SD_RESULT::OK;
@@ -427,7 +510,7 @@ EC_SD_RESULT MicrosdSpi::readSector ( uint32_t sector, uint8_t *target_array, ui
 			cout_sector--;						// cout_sector 1 сектор записали.
 		}
 
-	}  while ( true );
+	}	while ( true );
 
 	this->csHigh();
 
@@ -437,7 +520,7 @@ EC_SD_RESULT MicrosdSpi::readSector ( uint32_t sector, uint8_t *target_array, ui
 }
 
 // Записать по адресу address массив src длинной 512 байт.
-EC_SD_RESULT MicrosdSpi::writeSector ( const uint8_t* const source_array, uint32_t sector, uint32_t cout_sector, uint32_t timeout_ms  ) {
+EC_SD_RESULT MicrosdSpi::writeSector ( const uint8_t* const source_array, uint32_t sector, uint32_t cout_sector, uint32_t timeout_ms	) {
 	( void )timeout_ms;
 
 	uint32_t address;
@@ -451,25 +534,27 @@ EC_SD_RESULT MicrosdSpi::writeSector ( const uint8_t* const source_array, uint32
 	uint8_t* p_buf = ( uint8_t* )source_array;
 
 	do {
-		address = this->getArgAddress( sector );	  // В зависимости от типа карты - адресация может быть побайтовая или поблочная
+		address = this->getArgAddress( sector );		// В зависимости от типа карты - адресация может быть побайтовая или поблочная
 															// (блок - 512 байт).
 
-		if ( this->sendCmd( CMD24, address, 0 )				 != EC_SD_RES::OK ) break;				  // Отправляем CMD24.
+		if ( this->sendCmd( CMD24, address, this->getCrc7( CMD24, address ) )	!= EC_SD_RES::OK )
+			break;					// Отправляем CMD24.
+
 		uint8_t r1;
 		if ( this->waitR1( &r1 )								!= EC_SD_RES::OK ) break;
 		if ( r1 != 0 ) break;
-		if ( this->sendWaitOnePackage()					   != EC_SD_RES::OK ) break;				  // Обязательно ждем 1 пакет.
-		if ( this->sendMark( CMD24_MARK )					   != EC_SD_RES::OK ) break;
+		if ( this->sendWaitOnePackage()						!= EC_SD_RES::OK ) break;					// Обязательно ждем 1 пакет.
+		if ( this->sendMark( CMD24_MARK )						!= EC_SD_RES::OK ) break;
 
 		// Пишем 512 байт.
 		this->csLow();
 
-		if ( this->cfg->s->tx( p_buf, 512, 100 )	!= BASE_RESULT::OK )   break;
-		uint8_t crc_out[2] = { 0 };					  // Отправляем любой CRC.
-		if ( this->cfg->s->tx( crc_out, 2, 100 )		   != BASE_RESULT::OK )   break;
+		if ( this->cfg->s->tx( p_buf, 512, 100 )	!= BASE_RESULT::OK )	break;
+		uint8_t crc_out[2] = { 0 };						// Отправляем любой CRC.
+		if ( this->cfg->s->tx( crc_out, 2, 100 )			!= BASE_RESULT::OK )	break;
 		// Сразу же должен прийти ответ - принята ли команда записи.
 		uint8_t answer_write_commend_in;
-		if ( this->cfg->s->rx( &answer_write_commend_in, 1, 10, 0xFF ) != BASE_RESULT::OK )   break;
+		if ( this->cfg->s->rx( &answer_write_commend_in, 1, 10, 0xFF ) != BASE_RESULT::OK )	break;
 		if ( ( answer_write_commend_in & ( 1 << 4 ) ) != 0 ) break;
 		answer_write_commend_in &= 0b1111;
 		if ( answer_write_commend_in != 0b0101 )			 break; // Если не успех - выходим.
@@ -499,5 +584,59 @@ EC_SD_RESULT MicrosdSpi::writeSector ( const uint8_t* const source_array, uint32
 	return r;
 }
 
+EC_SD_RESULT MicrosdSpi::getSectorCount ( uint32_t& sectorCount ) {
+	if ( this->sendCmd( CMD9, 0, this->getCrc7( CMD9, 0  ) ) != EC_SD_RES::OK )
+		return EC_SD_RESULT::ERROR;
 
+	uint8_t	csd[16];
+	if ( this->readDataPackage( csd, 16 ) != EC_SD_RES::OK )
+		return EC_SD_RESULT::ERROR;
+
+	uint32_t csize;
+	if ( ( csd[0] >> 6 ) == 1) {	// SDC ver 2.00
+		csize = csd[9] + ((uint32_t)csd[8] << 8) + ((uint32_t)(csd[7] & 63) << 16) + 1;
+		sectorCount= csize << 10;
+	} else {						// SDC ver 1.XX or MMC ver 3
+		uint32_t n;
+		n = (csd[5] & 15) + ((csd[10] & 128) >> 7) + ((csd[9] & 3) << 1) + 2;
+		csize = (csd[8] >> 6) + ((uint32_t)csd[7] << 2) + ((uint32_t)(csd[6] & 3) << 10) + 1;
+		sectorCount = csize << (n - 9);
+	}
+
+	return EC_SD_RESULT::OK;
+}
+
+EC_SD_RESULT MicrosdSpi::getBlockSize ( uint32_t& blockSize ) {
+	/// Метод не работает нормально!
+	if ( ( uint32_t )this->typeMicrosd & ( uint32_t )EC_MICRO_SD_TYPE::SD2 ) {		// SDC ver 2.00
+		if ( this->sendAcmd( ACMD13, 0, this->getCrc7( ACMD13, 0 ) ) != EC_SD_RES::OK )			// Read SD status
+			return EC_SD_RESULT::ERROR;
+
+		if ( this->waitR1()	!= EC_SD_RES::OK )
+			return EC_SD_RESULT::ERROR;
+
+		uint8_t	csd[16];
+		if ( this->readDataPackage( csd, 16 ) != EC_SD_RES::OK )		// Read partial block
+			return EC_SD_RESULT::ERROR;
+
+		this->sendEmptyPackage( 64 - 16 );								// Purge trailing data
+		blockSize = 16UL << (csd[10] >> 4);
+
+	} else {															// SDC ver 1.XX or MMC
+		if ( this->sendCmd( CMD9, 0, this->getCrc7( CMD9, 0 )  ) != EC_SD_RES::OK )
+			return EC_SD_RESULT::ERROR;
+
+		uint8_t	csd[16];
+		if ( this->readDataPackage( csd, 16 ) != EC_SD_RES::OK )
+			return EC_SD_RESULT::ERROR;
+
+		if ( ( uint32_t )this->typeMicrosd & ( uint32_t )EC_MICRO_SD_TYPE::SD1 ) {			// SDC ver 1.XX
+			blockSize = (((csd[10] & 63) << 1) + ((uint32_t)(csd[11] & 128) >> 7) + 1) << ((csd[13] >> 6) - 1);
+		} else {														// MMC
+			blockSize = ((uint32_t)((csd[10] & 124) >> 2) + 1) * (((csd[11] & 3) << 3) + ((csd[11] & 224) >> 5) + 1);
+		}
+	}
+
+	return EC_SD_RESULT::OK;
+}
 
