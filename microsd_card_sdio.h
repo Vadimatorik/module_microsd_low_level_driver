@@ -44,6 +44,9 @@ public:
 
 	EC_SD_STATUS		getStatus				( void );
 
+	EC_SD_RESULT		getSectorCount			( uint32_t& sectorCount );
+	EC_SD_RESULT		getBlockSize			( uint32_t& blockSize );
+
 	void	dmaRxHandler	( void );
 	void	dmaTxHandler	( void );
 	void	sdioHandler		( void );

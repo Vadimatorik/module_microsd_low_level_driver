@@ -79,18 +79,20 @@ EC_MICRO_SD_TYPE MicrosdSdio::initialize ( void ) {
 		return this->getType();
 	} else {	/// Интерфейс уже настроен, надо карту.
 		r = HAL_SD_InitCard( &this->handle );
-		if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
+		if ( r != HAL_StatusTypeDef::HAL_OK )
+			return EC_MICRO_SD_TYPE::ERROR;
 		return this->getType();
 	}
 }
 
 EC_MICRO_SD_TYPE MicrosdSdio::getType ( void ) {
-	switch ( this->handle.SdCard.CardType ) {
-		case CARD_SECURED:				return EC_MICRO_SD_TYPE::ERROR;
-		case CARD_SDSC:					return EC_MICRO_SD_TYPE::SDSC;
-		case CARD_SDHC_SDXC:			return EC_MICRO_SD_TYPE::SDHC_OR_SDXC;
-		default:						return EC_MICRO_SD_TYPE::SDSD;
+	EC_MICRO_SD_TYPE t;
+	t = ( this->handle.SdCard.CardVersion == CARD_V1_X ) ? EC_MICRO_SD_TYPE::SD1 : EC_MICRO_SD_TYPE::SD2;
+	if ( this->handle.SdCard.CardType == CARD_SDHC_SDXC ) {
+		t = ( EC_MICRO_SD_TYPE )((uint32_t)t | ( uint32_t )EC_MICRO_SD_TYPE::BLOCK);
 	}
+
+	return t;
 }
 
 EC_SD_RESULT MicrosdSdio::readSector ( uint32_t sector, uint8_t *target_array, uint32_t cout_sector, uint32_t timeout_ms )	{
@@ -184,4 +186,22 @@ EC_SD_STATUS MicrosdSdio::getStatus ( void ) {
 	} else {
 		return  EC_SD_STATUS::NOINIT;
 	}
+}
+
+EC_SD_RESULT MicrosdSdio::getSectorCount ( uint32_t& sectorCount ) {
+	if ( this->handle.State == HAL_SD_STATE_RESET ) {
+		return  EC_SD_RESULT::ERROR;
+	}
+
+	sectorCount = this->handle.SdCard.LogBlockNbr;
+	return EC_SD_RESULT::OK;
+}
+
+EC_SD_RESULT MicrosdSdio::getBlockSize ( uint32_t& blockSize ) {
+	if ( this->handle.State == HAL_SD_STATE_RESET ) {
+		return  EC_SD_RESULT::ERROR;
+	}
+
+	blockSize = this->handle.SdCard.LogBlockSize;
+	return EC_SD_RESULT::OK;
 }
