@@ -1,20 +1,17 @@
 #pragma once
 
+#ifdef MODULE_MICROSD_CARD_SDIO_ENABLED
+
 #include "mc_hardware_interfaces_pin.h"
 #include "user_os.h"
 #include "microsd_base.h"
 
 #ifdef STM32F2
 #include "stm32f2xx_hal_sd.h"
-#include "stm32f2xx_hal_rcc.h"
-#include "stm32f2xx_hal_dma.h"
 #endif
 
-#ifdef STM32F4
-#include "stm32f4xx_hal_sd.h"
-#include "stm32f4xx_hal_rcc.h"
-#include "stm32f4xx_hal_dma.h"
-#endif
+#include "dma.h"
+#include "rcc.h"
 
 struct microsd_sdio_cfg_t {
 	uint32_t					wide;				/// SDIO_BUS_WIDE_1B, SDIO_BUS_WIDE_4B, SDIO_BUS_WIDE_8B.
@@ -69,3 +66,5 @@ private:
 	USER_OS_STATIC_BIN_SEMAPHORE_BUFFER     	sb;
 	USER_OS_STATIC_BIN_SEMAPHORE				s = nullptr;
 };
+
+#endif

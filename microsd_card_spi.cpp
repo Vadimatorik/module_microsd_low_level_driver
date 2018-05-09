@@ -1,5 +1,7 @@
 #include "microsd_card_spi.h"
 
+#ifdef MODULE_MICROSD_CARD_SPI_ENABLED
+
 #define CMD0		( 0x40 )														// Программный сброс.
 #define CMD1		( 0x40 + 1)														// Инициировать процесс инициализации.
 #define CMD8		( 0x40 + 8 )													// Уточнить поддерживаемое нарпряжение.
@@ -640,3 +642,4 @@ EC_SD_RESULT MicrosdSpi::getBlockSize ( uint32_t& blockSize ) {
 	return EC_SD_RESULT::OK;
 }
 
+#endif

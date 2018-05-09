@@ -1,5 +1,6 @@
 #include "microsd_card_sdio.h"
-#include "dma.h"
+
+#ifdef MODULE_MICROSD_CARD_SDIO_ENABLED
 
 MicrosdSdio::MicrosdSdio ( const microsd_sdio_cfg_t* const cfg ) : cfg( cfg ) {
 	this->handle.Instance						= SDIO;
@@ -205,3 +206,5 @@ EC_SD_RESULT MicrosdSdio::getBlockSize ( uint32_t& blockSize ) {
 	blockSize = this->handle.SdCard.LogBlockSize;
 	return EC_SD_RESULT::OK;
 }
+
+#endif
