@@ -21,10 +21,10 @@ struct microsd_sdio_cfg_t {
 	uint32_t					div;				/// IS_SDIO_CLKDIV( value ).
 
 	/// DMA обязателен.
-	DMA_Stream_TypeDef*         dma_rx;				/// Из мерии DMAx_Streamx.
-	uint32_t                    dma_rx_ch;			/// Из серии DMA_CHANNEL_x.
-	uint8_t						dma_rx_irq_prio;	/// Если задан dma_rx.
-	uint8_t						sdio_irq_prio;		/// Задается если не указан dma_rx. Передача всегда идет в ручную (без DMA и IT).
+	DMA_Stream_TypeDef*         dmaRx;				/// Из мерии DMAx_Streamx.
+	uint32_t                    dmaRxCh;			/// Из серии DMA_CHANNEL_x.
+	uint8_t						dmaRxIrqPrio;		/// Если задан dma_rx.
+	uint8_t						sdioIrqPrio;		/// Задается если не указан dma_rx. Передача всегда идет в ручную (без DMA и IT).
 };
 
 
@@ -61,7 +61,7 @@ private:
 
 	SD_HandleTypeDef							handle;
 	DMA_HandleTypeDef							hdma_tx;
-	DMA_HandleTypeDef							hdma_rx;
+	DMA_HandleTypeDef							dmaRx;
 
 	USER_OS_STATIC_MUTEX                    	m = nullptr;
 	USER_OS_STATIC_MUTEX_BUFFER             	mb;

@@ -12,11 +12,11 @@ MicrosdSdio::MicrosdSdio ( const microsd_sdio_cfg_t* const cfg ) : cfg( cfg ) {
 
 	this->handle.obj								= this;
 
-	if (  this->cfg->dma_rx != nullptr ) {
-		this->handle.hdmarx								= &this->hdma_rx;
+	if (  this->cfg->dmaRx != nullptr ) {
+		this->handle.hdmarx								= &this->dmaRx;
 
-		this->handle.hdmarx->Instance					= this->cfg->dma_rx;
-		this->handle.hdmarx->Init.Channel				= this->cfg->dma_rx_ch;
+		this->handle.hdmarx->Instance					= this->cfg->dmaRx;
+		this->handle.hdmarx->Init.Channel				= this->cfg->dmaRxCh;
 		this->handle.hdmarx->Init.Direction				= DMA_PERIPH_TO_MEMORY;
 		this->handle.hdmarx->Init.PeriphInc				= DMA_PINC_DISABLE;
 		this->handle.hdmarx->Init.MemInc				= DMA_MINC_ENABLE;
@@ -37,7 +37,7 @@ MicrosdSdio::MicrosdSdio ( const microsd_sdio_cfg_t* const cfg ) : cfg( cfg ) {
 }
 
 void MicrosdSdio::dmaRxHandler ( void ) {
-	HAL_DMA_IRQHandler( &this->hdma_rx );
+	HAL_DMA_IRQHandler( &this->dmaRx );
 }
 
 void MicrosdSdio::dmaTxHandler ( void ) {
@@ -52,18 +52,18 @@ EC_MICRO_SD_TYPE MicrosdSdio::initialize ( void ) {
 	HAL_StatusTypeDef r;
 
 	if ( HAL_SD_GetState( &this->handle ) == HAL_SD_STATE_RESET ) {		/// Первый запуск.
-		if (  this->cfg->dma_rx != nullptr ) {
-			dmaClkOn( this->cfg->dma_rx );
-			r = HAL_DMA_DeInit( &this->hdma_rx );
+		if (  this->cfg->dmaRx != nullptr ) {
+			dmaClkOn( this->cfg->dmaRx );
+			r = HAL_DMA_DeInit( &this->dmaRx );
 			if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
-			r = HAL_DMA_Init( &this->hdma_rx );
+			r = HAL_DMA_Init( &this->dmaRx );
 			if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
 
-			dmaIrqOn( this->cfg->dma_rx, this->cfg->dma_rx_irq_prio );
+			dmaIrqOn( this->cfg->dmaRx, this->cfg->dmaRxIrqPrio );
 		}
 
-		if ( this->cfg->dma_rx == nullptr ) {
-			NVIC_SetPriority( SDIO_IRQn, this->cfg->sdio_irq_prio );
+		if ( this->cfg->dmaRx == nullptr ) {
+			NVIC_SetPriority( SDIO_IRQn, this->cfg->sdioIrqPrio );
 			NVIC_EnableIRQ( SDIO_IRQn );
 		}
 
@@ -103,7 +103,7 @@ EC_SD_RESULT MicrosdSdio::readSector ( uint32_t sector, uint8_t *target_array, u
 
 	xSemaphoreTake ( this->s, 0 );
 
-	if ( this->cfg->dma_rx != nullptr ) {
+	if ( this->cfg->dmaRx != nullptr ) {
 		r = HAL_SD_ReadBlocks_DMA( &this->handle, target_array, sector, cout_sector );
 	} else {
 		r = HAL_SD_ReadBlocks_IT( &this->handle, target_array, sector, cout_sector );
