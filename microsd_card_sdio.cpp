@@ -97,6 +97,11 @@ EC_MICRO_SD_TYPE MicrosdSdio::getType ( void ) {
 }
 
 EC_SD_RESULT MicrosdSdio::readSector ( uint32_t sector, uint8_t *target_array, uint32_t cout_sector, uint32_t timeout_ms )	{
+	/// Указатель должен быть выравнен на 4.
+	if ( ( uint32_t )target_array & 0b11 ) {
+		while(1);
+	}
+
 	USER_OS_TAKE_MUTEX( this->m, portMAX_DELAY );
 
 	EC_SD_RESULT rv = EC_SD_RESULT::ERROR;
@@ -134,6 +139,11 @@ EC_SD_RESULT MicrosdSdio::readSector ( uint32_t sector, uint8_t *target_array, u
 }
 
 EC_SD_RESULT MicrosdSdio::writeSector ( const uint8_t* const source_array, uint32_t sector, uint32_t cout_sector, uint32_t timeout_ms ) {
+	if ( ( uint32_t )source_array & 0b11 ) {
+		while(1);
+	}
+
+
 	USER_OS_TAKE_MUTEX( this->m, portMAX_DELAY );
 
 	EC_SD_RESULT rv = EC_SD_RESULT::ERROR;
@@ -176,17 +186,26 @@ void HAL_SD_RxCpltCallback( SD_HandleTypeDef *hsd ) {
 
 }
 
+#define NUMBER_OF_ATTEMPTS				30
+
+
 EC_SD_STATUS MicrosdSdio::getStatus ( void ) {
 	if ( this->handle.State == HAL_SD_STATE_RESET ) {
 		return  EC_SD_STATUS::NOINIT;
 	}
 
-	HAL_SD_CardStateTypeDef s = HAL_SD_GetCardState( &this->handle );
-	if ( s == HAL_SD_CARD_TRANSFER ) {
-		return  EC_SD_STATUS::OK;
-	} else {
-		return  EC_SD_STATUS::NOINIT;
-	}
+	int l = NUMBER_OF_ATTEMPTS;
+
+	do {
+		HAL_SD_CardStateTypeDef s = HAL_SD_GetCardState( &this->handle );
+		if ( s == HAL_SD_CARD_TRANSFER ) {
+			return EC_SD_STATUS::OK;
+		}
+		l--;
+		USER_OS_DELAY_MS(1);
+	} while( l );
+
+	return  EC_SD_STATUS::NOINIT;
 }
 
 EC_SD_RESULT MicrosdSdio::getSectorCount ( uint32_t& sectorCount ) {
