@@ -394,41 +394,16 @@ EC_MICRO_SD_TYPE MicrosdSpi::initialize ( void ) {
 
 				if ( timer == 0 ) break;
 
+				if ( this->sendCmd( CMD16, 0, this->getCrc7( CMD16, 0 ) ) != EC_SD_RES::OK )
+					break;
 
-			} else {
-				this->typeMicrosd = EC_MICRO_SD_TYPE::MMC;
-
-				while ( timer ) {
-					EC_SD_RES	sendResult;
-					sendResult = this->sendCmd( CMD1, 0, this->getCrc7( CMD1, 0 ) );
-
-					if ( sendResult != EC_SD_RES::OK ) {
-						timer = 0;
-						break;
-					}
-
-					if ( this->waitR1( &r1 ) != EC_SD_RES::OK ) {
-						timer = 0;
-						break;
-					}
-
-					timer--;
-
-					if ( r1 != 0 ) {
-						continue;
-					}
+				if ( this->waitR1() != EC_SD_RES::OK ) {
+					this->typeMicrosd = EC_MICRO_SD_TYPE::ERROR;
+					break;
 				}
-
-				if ( timer == 0 ) break;
-			}
-
-			if ( this->sendCmd( CMD16, 0, this->getCrc7( CMD16, 0 ) ) != EC_SD_RES::OK ) break;
-			if ( this->waitR1() != EC_SD_RES::OK ) {
-				this->typeMicrosd = EC_MICRO_SD_TYPE::ERROR;
-				break;
 			}
 		}
-	} while( 0 );
+	} while( false );
 
 	// Теперь с SD можно работать на высоких скоростях.
 	if ( this->typeMicrosd != EC_MICRO_SD_TYPE::ERROR ) {
@@ -473,6 +448,15 @@ EC_MICRO_SD_TYPE MicrosdSpi::getType ( void ) {
 EC_SD_RESULT MicrosdSpi::readSector ( uint32_t sector, uint8_t *target_array, uint32_t cout_sector, uint32_t timeout_ms	) {
 	( void )timeout_ms;
 
+/// В релизе не должно быть такой ситуации,
+/// чтобы указатель был не выравнен.
+#ifdef DEBUG
+	/// Указатель должен быть выравнен на 4.
+	if ( ( uint32_t )target_array & 0b11 ) {
+		while(1);
+	}
+#endif
+
 	uint32_t address;
 
 	this->cfg->setSpiSpeed( this->cfg->s, true );
@@ -497,11 +481,13 @@ EC_SD_RESULT MicrosdSpi::readSector ( uint32_t sector, uint8_t *target_array, ui
 		// Считываем 512 байт.
 		this->csLow();
 
-		if ( this->cfg->s->rx( p_buf, 512, 100, 0xFF )		!= BASE_RESULT::OK ) break;
+		if ( this->cfg->s->rx( p_buf, 512, 100, 0xFF )		!= BASE_RESULT::OK )	break;
 		uint8_t crc_in[2] = {0xFF, 0xFF};
 
-		if ( this->cfg->s->rx( crc_in, 2, 10, 0xFF )				!= BASE_RESULT::OK ) break;
-		if ( this->sendWaitOnePackage()			!= EC_SD_RES::OK ) break;
+		if ( this->cfg->s->rx( crc_in, 2, 10, 0xFF )		!= BASE_RESULT::OK )	break;
+		if ( this->sendWaitOnePackage()						!= EC_SD_RES::OK )		break;
+
+		cout_sector--;						// cout_sector 1 сектор записали.
 
 		if ( cout_sector == 0 ) {
 			r = EC_SD_RESULT::OK;
@@ -509,7 +495,6 @@ EC_SD_RESULT MicrosdSpi::readSector ( uint32_t sector, uint8_t *target_array, ui
 		} else {
 			sector++;							// Будем писать следующий сектор.
 			p_buf += 512;						// 512 байт уже записали.
-			cout_sector--;						// cout_sector 1 сектор записали.
 		}
 
 	}	while ( true );
@@ -524,6 +509,15 @@ EC_SD_RESULT MicrosdSpi::readSector ( uint32_t sector, uint8_t *target_array, ui
 // Записать по адресу address массив src длинной 512 байт.
 EC_SD_RESULT MicrosdSpi::writeSector ( const uint8_t* const source_array, uint32_t sector, uint32_t cout_sector, uint32_t timeout_ms	) {
 	( void )timeout_ms;
+
+	/// В релизе не должно быть такой ситуации,
+	/// чтобы указатель был не выравнен.
+#ifdef DEBUG
+	/// Указатель должен быть выравнен на 4.
+	if ( ( uint32_t )source_array & 0b11 ) {
+		while(1);
+	}
+#endif
 
 	uint32_t address;
 
@@ -568,6 +562,7 @@ EC_SD_RESULT MicrosdSpi::writeSector ( const uint8_t* const source_array, uint32
 		if ( write_wait == 0 ) break;
 		if ( this->sendWaitOnePackage() != EC_SD_RES::OK ) break;
 
+		cout_sector--;						// cout_sector 1 сектор записали.
 
 		if ( cout_sector == 0 ) {
 			r = EC_SD_RESULT::OK;
@@ -575,7 +570,6 @@ EC_SD_RESULT MicrosdSpi::writeSector ( const uint8_t* const source_array, uint32
 		} else {
 			sector++;							// Будем писать следующий сектор.
 			p_buf += 512;						// 512 байт уже записали.
-			cout_sector--;						// cout_sector 1 сектор записали.
 		}
 	} while ( true );
 
