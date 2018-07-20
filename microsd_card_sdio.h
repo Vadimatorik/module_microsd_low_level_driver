@@ -10,6 +10,10 @@
 #include "stm32f2xx_hal_sd.h"
 #endif
 
+#ifdef STM32F4
+#include "stm32f4xx_hal_sd.h"
+#endif
+
 #include "dma.h"
 #include "rcc.h"
 
