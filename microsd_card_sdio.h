@@ -17,21 +17,24 @@
 #include "dma.h"
 #include "rcc.h"
 
-struct microsd_sdio_cfg_t {
+struct MicrosdSdioCfg {
 	uint32_t					wide;				/// SDIO_BUS_WIDE_1B, SDIO_BUS_WIDE_4B, SDIO_BUS_WIDE_8B.
-	uint32_t					div;				/// IS_SDIO_CLKDIV( value ).
+	uint32_t					div;
 
-	/// DMA обязателен.
+	/// Должны быть заданы все.
 	DMA_Stream_TypeDef*         dmaRx;				/// Из мерии DMAx_Streamx.
 	uint32_t                    dmaRxCh;			/// Из серии DMA_CHANNEL_x.
-	uint8_t						dmaRxIrqPrio;		/// Если задан dma_rx.
-	uint8_t						sdioIrqPrio;		/// Задается если не указан dma_rx. Передача всегда идет в ручную (без DMA и IT).
+	uint8_t						dmaRxIrqPrio;
+	DMA_Stream_TypeDef*         dmaTx;				/// Из мерии DMAx_Streamx.
+	uint32_t                    dmaTxCh;			/// Из серии DMA_CHANNEL_x.
+	uint8_t						dmaTxIrqPrio;
+	uint8_t						sdioIrq;
 };
 
 
 class MicrosdSdio : public MicrosdBase {
 public:
-	MicrosdSdio ( const microsd_sdio_cfg_t* const cfg );
+	MicrosdSdio ( const MicrosdSdioCfg* const cfg );
 
 	EC_MICRO_SD_TYPE	initialize				( void );
 
@@ -57,11 +60,15 @@ public:
 	void	sdioHandler		( void );
 
 	void    giveSemaphore ( void );         // Отдать симафор из прерывания (внутренняя функция.
+
 private:
-	const microsd_sdio_cfg_t* const cfg;
+	EC_MICRO_SD_TYPE	waitReadySd				(	void	);
+
+private:
+	const MicrosdSdioCfg* const cfg;
 
 	SD_HandleTypeDef							handle;
-	DMA_HandleTypeDef							hdma_tx;
+	DMA_HandleTypeDef							dmaTx;
 	DMA_HandleTypeDef							dmaRx;
 
 	USER_OS_STATIC_MUTEX                    	m = nullptr;

@@ -2,36 +2,53 @@
 
 #ifdef MODULE_MICROSD_CARD_SDIO_ENABLED
 
-MicrosdSdio::MicrosdSdio ( const microsd_sdio_cfg_t* const cfg ) : cfg( cfg ) {
-	this->handle.Instance						= SDIO;
-	this->handle.Init.ClockEdge					= SDIO_CLOCK_EDGE_RISING;
-	this->handle.Init.ClockBypass				= SDIO_CLOCK_BYPASS_DISABLE;
-	this->handle.Init.ClockPowerSave			= SDIO_CLOCK_POWER_SAVE_DISABLE;
-	this->handle.Init.BusWide					= SDIO_BUS_WIDE_1B;
-	this->handle.Init.HardwareFlowControl		= SDIO_HARDWARE_FLOW_CONTROL_DISABLE;
-	this->handle.Init.ClockDiv					= cfg->div;
+#define checkResult(r)									\
+		if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
+
+MicrosdSdio::MicrosdSdio ( const MicrosdSdioCfg* const cfg ) : cfg( cfg ) {
+	this->handle.Instance							= SDIO;
+	this->handle.Init.ClockEdge						= SDIO_CLOCK_EDGE_RISING;
+	this->handle.Init.ClockBypass					= SDIO_CLOCK_BYPASS_DISABLE;
+	this->handle.Init.ClockPowerSave				= SDIO_CLOCK_POWER_SAVE_DISABLE;
+	this->handle.Init.BusWide						= SDIO_BUS_WIDE_1B;
+	this->handle.Init.HardwareFlowControl			= SDIO_HARDWARE_FLOW_CONTROL_DISABLE;
+	this->handle.Init.ClockDiv						= cfg->div;
 
 	this->handle.obj								= this;
 
-	if (  this->cfg->dmaRx != nullptr ) {
-		this->handle.hdmarx								= &this->dmaRx;
+	this->handle.hdmarx								= &this->dmaRx;
+	this->handle.hdmatx								= &this->dmaTx;
 
-		this->handle.hdmarx->Instance					= this->cfg->dmaRx;
-		this->handle.hdmarx->Init.Channel				= this->cfg->dmaRxCh;
-		this->handle.hdmarx->Init.Direction				= DMA_PERIPH_TO_MEMORY;
-		this->handle.hdmarx->Init.PeriphInc				= DMA_PINC_DISABLE;
-		this->handle.hdmarx->Init.MemInc				= DMA_MINC_ENABLE;
-		this->handle.hdmarx->Init.PeriphDataAlignment	= DMA_PDATAALIGN_WORD;
-		this->handle.hdmarx->Init.MemDataAlignment		= DMA_MDATAALIGN_WORD;
-		this->handle.hdmarx->Init.Mode					= DMA_PFCTRL;
-		this->handle.hdmarx->Init.Priority				= DMA_PRIORITY_LOW;
-		this->handle.hdmarx->Init.FIFOMode				= DMA_FIFOMODE_ENABLE;
-		this->handle.hdmarx->Init.FIFOThreshold			= DMA_FIFO_THRESHOLD_FULL;
-		this->handle.hdmarx->Init.MemBurst				= DMA_MBURST_INC4;
-		this->handle.hdmarx->Init.PeriphBurst			= DMA_PBURST_INC4;
+	this->handle.hdmarx->Parent						= &this->handle;
+	this->handle.hdmatx->Parent						= &this->handle;
 
-		this->handle.hdmarx->Parent					 = &this->handle;
-	}
+	this->handle.hdmarx->Instance					= this->cfg->dmaRx;
+	this->handle.hdmarx->Init.Channel				= this->cfg->dmaRxCh;
+	this->handle.hdmarx->Init.Direction				= DMA_PERIPH_TO_MEMORY;
+	this->handle.hdmarx->Init.PeriphInc				= DMA_PINC_DISABLE;
+	this->handle.hdmarx->Init.MemInc				= DMA_MINC_ENABLE;
+	this->handle.hdmarx->Init.PeriphDataAlignment	= DMA_PDATAALIGN_WORD;
+	this->handle.hdmarx->Init.MemDataAlignment		= DMA_MDATAALIGN_WORD;
+	this->handle.hdmarx->Init.Mode					= DMA_PFCTRL;
+	this->handle.hdmarx->Init.Priority				= DMA_PRIORITY_LOW;
+	this->handle.hdmarx->Init.FIFOMode				= DMA_FIFOMODE_ENABLE;
+	this->handle.hdmarx->Init.FIFOThreshold			= DMA_FIFO_THRESHOLD_FULL;
+	this->handle.hdmarx->Init.MemBurst				= DMA_MBURST_INC4;
+	this->handle.hdmarx->Init.PeriphBurst			= DMA_PBURST_INC4;
+
+	this->handle.hdmatx->Instance					= this->cfg->dmaTx;
+	this->handle.hdmatx->Init.Channel				= this->cfg->dmaTxCh;
+	this->handle.hdmatx->Init.Direction				= DMA_MEMORY_TO_PERIPH;
+	this->handle.hdmatx->Init.PeriphInc				= DMA_PINC_DISABLE;
+	this->handle.hdmatx->Init.MemInc				= DMA_MINC_ENABLE;
+	this->handle.hdmatx->Init.PeriphDataAlignment	= DMA_PDATAALIGN_WORD;
+	this->handle.hdmatx->Init.MemDataAlignment		= DMA_MDATAALIGN_WORD;
+	this->handle.hdmatx->Init.Mode					= DMA_PFCTRL;
+	this->handle.hdmatx->Init.Priority				= DMA_PRIORITY_LOW;
+	this->handle.hdmatx->Init.FIFOMode				= DMA_FIFOMODE_ENABLE;
+	this->handle.hdmatx->Init.FIFOThreshold			= DMA_FIFO_THRESHOLD_FULL;
+	this->handle.hdmatx->Init.MemBurst				= DMA_MBURST_INC4;
+	this->handle.hdmatx->Init.PeriphBurst			= DMA_PBURST_INC4;
 
 	this->m = USER_OS_STATIC_MUTEX_CREATE( &mb );
 	this->s = USER_OS_STATIC_BIN_SEMAPHORE_CREATE( &this->sb );
@@ -42,7 +59,7 @@ void MicrosdSdio::dmaRxHandler ( void ) {
 }
 
 void MicrosdSdio::dmaTxHandler ( void ) {
-	HAL_DMA_IRQHandler( &this->hdma_tx );
+	HAL_DMA_IRQHandler( &this->dmaTx );
 }
 
 void MicrosdSdio::sdioHandler ( void ) {
@@ -53,35 +70,27 @@ EC_MICRO_SD_TYPE MicrosdSdio::initialize ( void ) {
 	HAL_StatusTypeDef r;
 
 	if ( HAL_SD_GetState( &this->handle ) == HAL_SD_STATE_RESET ) {		/// Первый запуск.
-		if (  this->cfg->dmaRx != nullptr ) {
-			dmaClkOn( this->cfg->dmaRx );
-			r = HAL_DMA_DeInit( &this->dmaRx );
-			if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
-			r = HAL_DMA_Init( &this->dmaRx );
-			if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
+		dmaClkOn( this->cfg->dmaTx );
+		dmaClkOn( this->cfg->dmaRx );
 
-			dmaIrqOn( this->cfg->dmaRx, this->cfg->dmaRxIrqPrio );
-		}
+		checkResult( HAL_DMA_DeInit( &this->dmaTx ) );
+		checkResult( HAL_DMA_Init( &this->dmaTx ) );
 
-		if ( this->cfg->dmaRx == nullptr ) {
-			NVIC_SetPriority( SDIO_IRQn, this->cfg->sdioIrqPrio );
-			NVIC_EnableIRQ( SDIO_IRQn );
-		}
+		checkResult( HAL_DMA_DeInit( &this->dmaRx ) );
+		checkResult( HAL_DMA_Init( &this->dmaRx ) );
+
+		dmaIrqOn( this->cfg->dmaRx, this->cfg->dmaRxIrqPrio );
+		dmaIrqOn( this->cfg->dmaTx, this->cfg->dmaTxIrqPrio );
 
 		__HAL_RCC_SDIO_CLK_ENABLE();
 
-		r = HAL_SD_DeInit( &this->handle );
-		if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
-		r = HAL_SD_Init( &this->handle );
-		if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
-		r = HAL_SD_ConfigWideBusOperation( &this->handle, this->cfg->wide );
-		if ( r != 0 ) return EC_MICRO_SD_TYPE::ERROR;
+		checkResult( HAL_SD_DeInit( &this->handle ) );
+		checkResult( HAL_SD_Init( &this->handle ) );
+		checkResult( HAL_SD_ConfigWideBusOperation( &this->handle, this->cfg->wide ) );
 
 		return this->getType();
-	} else {	/// Интерфейс уже настроен, надо карту.
-		r = HAL_SD_InitCard( &this->handle );
-		if ( r != HAL_StatusTypeDef::HAL_OK )
-			return EC_MICRO_SD_TYPE::ERROR;
+	} else {
+		checkResult( HAL_SD_InitCard( &this->handle ) );
 		return this->getType();
 	}
 }
@@ -96,40 +105,39 @@ EC_MICRO_SD_TYPE MicrosdSdio::getType ( void ) {
 	return t;
 }
 
-EC_SD_RESULT MicrosdSdio::readSector ( uint32_t sector, uint8_t *target_array, uint32_t cout_sector, uint32_t timeout_ms )	{
-	/// Указатель должен быть выравнен на 4.
-	if ( ( uint32_t )target_array & 0b11 ) {
-		while(1);
+EC_MICRO_SD_TYPE MicrosdSdio::waitReadySd ( void ) {
+	EC_SD_RESULT	rv = EC_SD_RESULT::OK;
+	uint32_t		timeout_flag = 1000;
+
+	while( timeout_flag ) {
+		if ( HAL_SD_GetCardState( &this->handle ) == HAL_SD_CARD_TRANSFER ) {
+			timeout_flag--;
+		}
+
+		if ( timeout_flag == 0 ) {
+			rv = EC_SD_RESULT::ERROR;
+		}
 	}
+
+	return rv;
+}
+
+EC_SD_RESULT MicrosdSdio::readSector ( uint32_t sector, uint8_t *targetArray, uint32_t countSector, uint32_t timeoutMs )	{
+	if ( ( uint32_t )targetArray & 0b11 )			/// Указатель должен быть выравнен на 4.
+		return EC_SD_RESULT::POINTERR;
+
+	EC_SD_RESULT rv = EC_SD_RESULT::ERROR;
 
 	USER_OS_TAKE_MUTEX( this->m, portMAX_DELAY );
 
-	EC_SD_RESULT rv = EC_SD_RESULT::ERROR;
-	HAL_StatusTypeDef r;
+	if ( this->waitReadySd() == EC_SD_RESULT::OK ) {
 
-	xSemaphoreTake ( this->s, 0 );
+		xSemaphoreTake ( this->s, 0 );
 
-	if ( this->cfg->dmaRx != nullptr ) {
-		r = HAL_SD_ReadBlocks_DMA( &this->handle, target_array, sector, cout_sector );
-	} else {
-		r = HAL_SD_ReadBlocks_IT( &this->handle, target_array, sector, cout_sector );
-	}
-
-	if ( r == HAL_OK ) {
-		if ( xSemaphoreTake ( this->s, timeout_ms ) == pdTRUE ) {
-			rv = EC_SD_RESULT::OK;
-		};
-
-		/// Ждем отзыва о том, что карта снова готова.
-		if ( rv == EC_SD_RESULT::OK ) {
-			uint32_t timeout_flag = 1000;
-			while( timeout_flag ) {
-				if ( HAL_SD_GetCardState( &this->handle ) == HAL_SD_CARD_TRANSFER ) break;
-				timeout_flag--;
-			}
-			if ( timeout_flag == 0 ) {
-				rv = EC_SD_RESULT::ERROR;
-			}
+		if ( HAL_SD_ReadBlocks_DMA( &this->handle, targetArray, sector, countSector ) == HAL_OK ) {
+			if ( xSemaphoreTake ( this->s, timeoutMs ) == pdTRUE ) {
+				rv = EC_SD_RESULT::OK;
+			};
 		}
 	}
 
@@ -138,30 +146,22 @@ EC_SD_RESULT MicrosdSdio::readSector ( uint32_t sector, uint8_t *target_array, u
 	return rv;
 }
 
-EC_SD_RESULT MicrosdSdio::writeSector ( const uint8_t* const source_array, uint32_t sector, uint32_t cout_sector, uint32_t timeout_ms ) {
-	if ( ( uint32_t )source_array & 0b11 ) {
-		while(1);
-	}
+EC_SD_RESULT MicrosdSdio::writeSector ( const uint8_t* const sourceArray, uint32_t sector, uint32_t countSector, uint32_t timeoutMs ) {
+	if ( ( uint32_t )sourceArray & 0b11 )			/// Указатель должен быть выравнен на 4.
+		return EC_SD_RESULT::POINTERR;
 
+	EC_SD_RESULT rv = EC_SD_RESULT::ERROR;
 
 	USER_OS_TAKE_MUTEX( this->m, portMAX_DELAY );
 
-	EC_SD_RESULT rv = EC_SD_RESULT::ERROR;
-	HAL_StatusTypeDef r;
+	if ( this->waitReadySd() == EC_SD_RESULT::OK ) {
 
-	__disable_irq();
-	r = HAL_SD_WriteBlocks( &this->handle, (uint8_t*)source_array, sector, cout_sector, timeout_ms );
-	__enable_irq();
+		xSemaphoreTake ( this->s, 0 );
 
-	if ( r == HAL_OK ) {
-		rv = EC_SD_RESULT::OK;
-		uint32_t timeout_flag = 1000;
-		while( timeout_flag ) {
-			if ( HAL_SD_GetCardState( &this->handle ) == HAL_SD_CARD_TRANSFER ) break;
-			timeout_flag--;
-		}
-		if ( timeout_flag == 0 ) {
-			rv = EC_SD_RESULT::ERROR;
+		if ( HAL_SD_WriteBlocks_DMA( &this->handle, (uint8_t*)sourceArray, sector, countSector ) == HAL_OK ) {
+			if ( xSemaphoreTake ( this->s, timeoutMs ) == pdTRUE ) {
+				rv = EC_SD_RESULT::OK;
+			};
 		}
 	}
 

@@ -7,7 +7,8 @@ enum class EC_SD_RESULT {
 	ERROR	= 1,		// 1: R/W Error
 	WRPRT	= 2,		// 2: Write Protected
 	NOTRDY	= 3,		// 3: Not Ready
-	PARERR	= 4			// 4: Invalid Parameter
+	PARERR	= 4,			// 4: Invalid Parameter
+	POINTERR	=	5
 };
 
 enum class EC_SD_STATUS {
