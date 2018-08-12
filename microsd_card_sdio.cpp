@@ -67,8 +67,6 @@ void MicrosdSdio::sdioHandler ( void ) {
 }
 
 EC_MICRO_SD_TYPE MicrosdSdio::initialize ( void ) {
-	HAL_StatusTypeDef r;
-
 	if ( HAL_SD_GetState( &this->handle ) == HAL_SD_STATE_RESET ) {		/// Первый запуск.
 		dmaClkOn( this->cfg->dmaTx );
 		dmaClkOn( this->cfg->dmaRx );
@@ -105,7 +103,7 @@ EC_MICRO_SD_TYPE MicrosdSdio::getType ( void ) {
 	return t;
 }
 
-EC_MICRO_SD_TYPE MicrosdSdio::waitReadySd ( void ) {
+EC_SD_RESULT MicrosdSdio::waitReadySd ( void ) {
 	EC_SD_RESULT	rv = EC_SD_RESULT::OK;
 	uint32_t		timeout_flag = 1000;
 

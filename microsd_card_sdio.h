@@ -1,5 +1,7 @@
 #pragma once
 
+#include "project_config.h"
+
 #ifdef MODULE_MICROSD_CARD_SDIO_ENABLED
 
 #include "mc_hardware_interfaces_pin.h"
@@ -62,7 +64,7 @@ public:
 	void    giveSemaphore ( void );         // Отдать симафор из прерывания (внутренняя функция.
 
 private:
-	EC_MICRO_SD_TYPE	waitReadySd				(	void	);
+	EC_SD_RESULT	waitReadySd				(	void	);
 
 private:
 	const MicrosdSdioCfg* const cfg;
