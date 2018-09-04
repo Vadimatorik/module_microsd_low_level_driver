@@ -68,8 +68,8 @@ void MicrosdSdio::sdioHandler ( void ) {
 
 EC_MICRO_SD_TYPE MicrosdSdio::initialize ( void ) {
 	if ( HAL_SD_GetState( &this->handle ) == HAL_SD_STATE_RESET ) {		/// Первый запуск.
-		dmaClkOn( this->cfg->dmaTx );
-		dmaClkOn( this->cfg->dmaRx );
+		McHardwareInterfacesImplementation::dmaClkOn( this->cfg->dmaTx );
+		McHardwareInterfacesImplementation::dmaClkOn( this->cfg->dmaRx );
 
 		checkResult( HAL_DMA_DeInit( &this->dmaTx ) );
 		checkResult( HAL_DMA_Init( &this->dmaTx ) );
@@ -77,8 +77,8 @@ EC_MICRO_SD_TYPE MicrosdSdio::initialize ( void ) {
 		checkResult( HAL_DMA_DeInit( &this->dmaRx ) );
 		checkResult( HAL_DMA_Init( &this->dmaRx ) );
 
-		dmaIrqOn( this->cfg->dmaRx, this->cfg->dmaRxIrqPrio );
-		dmaIrqOn( this->cfg->dmaTx, this->cfg->dmaTxIrqPrio );
+		McHardwareInterfacesImplementation::dmaIrqOn( this->cfg->dmaRx, this->cfg->dmaRxIrqPrio );
+		McHardwareInterfacesImplementation::dmaIrqOn( this->cfg->dmaTx, this->cfg->dmaTxIrqPrio );
 
 		__HAL_RCC_SDIO_CLK_ENABLE();
 
