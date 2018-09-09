@@ -30,7 +30,6 @@ struct MicrosdSdioCfg {
 	DMA_Stream_TypeDef*         dmaTx;				/// Из мерии DMAx_Streamx.
 	uint32_t                    dmaTxCh;			/// Из серии DMA_CHANNEL_x.
 	uint8_t						dmaTxIrqPrio;
-	uint8_t						sdioIrq;
 };
 
 
@@ -59,7 +58,6 @@ public:
 
 	void	dmaRxHandler	( void );
 	void	dmaTxHandler	( void );
-	void	sdioHandler		( void );
 
 	void    giveSemaphore ( void );         // Отдать симафор из прерывания (внутренняя функция.
 

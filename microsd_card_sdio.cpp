@@ -62,10 +62,6 @@ void MicrosdSdio::dmaTxHandler ( void ) {
 	HAL_DMA_IRQHandler( &this->dmaTx );
 }
 
-void MicrosdSdio::sdioHandler ( void ) {
-	HAL_SD_IRQHandler( &this->handle );
-}
-
 EC_MICRO_SD_TYPE MicrosdSdio::initialize ( void ) {
 	if ( HAL_SD_GetState( &this->handle ) == HAL_SD_STATE_RESET ) {		/// Первый запуск.
 		McHardwareInterfacesImplementation::dmaClkOn( this->cfg->dmaTx );
