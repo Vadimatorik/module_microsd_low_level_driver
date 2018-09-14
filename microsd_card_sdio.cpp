@@ -101,23 +101,6 @@ EC_MICRO_SD_TYPE MicrosdSdio::getType ( void ) {
 	return t;
 }
 
-EC_SD_RESULT MicrosdSdio::waitReadySd ( void ) {
-	EC_SD_RESULT	rv = EC_SD_RESULT::OK;
-	uint32_t		timeout_flag = 1000;
-
-	while( timeout_flag ) {
-		if ( HAL_SD_GetCardState( &this->handle ) == HAL_SD_CARD_TRANSFER ) {
-			timeout_flag--;
-		}
-
-		if ( timeout_flag == 0 ) {
-			rv = EC_SD_RESULT::ERROR;
-		}
-	}
-
-	return rv;
-}
-
 EC_SD_RESULT MicrosdSdio::readSector ( uint32_t sector, uint8_t *targetArray, uint32_t countSector, uint32_t timeoutMs )	{
 	if ( ( uint32_t )targetArray & 0b11 )			/// Указатель должен быть выравнен на 4.
 		return EC_SD_RESULT::POINTERR;
@@ -126,15 +109,12 @@ EC_SD_RESULT MicrosdSdio::readSector ( uint32_t sector, uint8_t *targetArray, ui
 
 	USER_OS_TAKE_MUTEX( this->m, portMAX_DELAY );
 
-	if ( this->waitReadySd() == EC_SD_RESULT::OK ) {
+	xSemaphoreTake ( this->s, 0 );
 
-		xSemaphoreTake ( this->s, 0 );
-
-		if ( HAL_SD_ReadBlocks_DMA( &this->handle, targetArray, sector, countSector ) == HAL_OK ) {
-			if ( xSemaphoreTake ( this->s, timeoutMs ) == pdTRUE ) {
-				rv = EC_SD_RESULT::OK;
-			};
-		}
+	if ( HAL_SD_ReadBlocks_DMA( &this->handle, targetArray, sector, countSector ) == HAL_OK ) {
+		if ( xSemaphoreTake ( this->s, timeoutMs ) == pdTRUE ) {
+			rv = EC_SD_RESULT::OK;
+		};
 	}
 
 	USER_OS_GIVE_MUTEX( this->m );
@@ -150,15 +130,12 @@ EC_SD_RESULT MicrosdSdio::writeSector ( const uint8_t* const sourceArray, uint32
 
 	USER_OS_TAKE_MUTEX( this->m, portMAX_DELAY );
 
-	if ( this->waitReadySd() == EC_SD_RESULT::OK ) {
+	xSemaphoreTake ( this->s, 0 );
 
-		xSemaphoreTake ( this->s, 0 );
-
-		if ( HAL_SD_WriteBlocks_DMA( &this->handle, (uint8_t*)sourceArray, sector, countSector ) == HAL_OK ) {
-			if ( xSemaphoreTake ( this->s, timeoutMs ) == pdTRUE ) {
-				rv = EC_SD_RESULT::OK;
-			};
-		}
+	if ( HAL_SD_WriteBlocks_DMA( &this->handle, (uint8_t*)sourceArray, sector, countSector ) == HAL_OK ) {
+		if ( xSemaphoreTake ( this->s, timeoutMs ) == pdTRUE ) {
+			rv = EC_SD_RESULT::OK;
+		};
 	}
 
 	USER_OS_GIVE_MUTEX( this->m );

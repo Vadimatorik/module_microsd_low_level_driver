@@ -62,9 +62,6 @@ public:
 	void    giveSemaphore ( void );         // Отдать симафор из прерывания (внутренняя функция.
 
 private:
-	EC_SD_RESULT	waitReadySd				(	void	);
-
-private:
 	const MicrosdSdioCfg* const cfg;
 
 	SD_HandleTypeDef							handle;
