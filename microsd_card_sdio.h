@@ -16,8 +16,8 @@
 #include "stm32f4xx_hal_sd.h"
 #endif
 
-#include "dma.h"
-#include "rcc.h"
+#include "mc_hardware_interfaces_implementation_for_stm32_dma.h"
+#include "mc_hardware_interfaces_implementation_for_stm32_rcc.h"
 
 struct MicrosdSdioCfg {
 	uint32_t					wide;				/// SDIO_BUS_WIDE_1B, SDIO_BUS_WIDE_4B, SDIO_BUS_WIDE_8B.
