@@ -23,13 +23,9 @@ struct MicrosdSdioCfg {
 	uint32_t					wide;				/// SDIO_BUS_WIDE_1B, SDIO_BUS_WIDE_4B, SDIO_BUS_WIDE_8B.
 	uint32_t					div;
 
-	/// Должны быть заданы все.
 	DMA_Stream_TypeDef*         dmaRx;				/// Из мерии DMAx_Streamx.
 	uint32_t                    dmaRxCh;			/// Из серии DMA_CHANNEL_x.
 	uint8_t						dmaRxIrqPrio;
-	DMA_Stream_TypeDef*         dmaTx;				/// Из мерии DMAx_Streamx.
-	uint32_t                    dmaTxCh;			/// Из серии DMA_CHANNEL_x.
-	uint8_t						dmaTxIrqPrio;
 };
 
 
@@ -57,15 +53,16 @@ public:
 	EC_SD_RESULT		getBlockSize			( uint32_t& blockSize );
 
 	void	dmaRxHandler	( void );
-	void	dmaTxHandler	( void );
 
 	void    giveSemaphore ( void );         // Отдать симафор из прерывания (внутренняя функция.
+
+private:
+	EC_SD_RESULT waitReadySd ( void );
 
 private:
 	const MicrosdSdioCfg* const cfg;
 
 	SD_HandleTypeDef							handle;
-	DMA_HandleTypeDef							dmaTx;
 	DMA_HandleTypeDef							dmaRx;
 
 	USER_OS_STATIC_MUTEX                    	m = nullptr;

@@ -17,10 +17,10 @@ MicrosdSdio::MicrosdSdio ( const MicrosdSdioCfg* const cfg ) : cfg( cfg ) {
 	this->handle.obj								= this;
 
 	this->handle.hdmarx								= &this->dmaRx;
-	this->handle.hdmatx								= &this->dmaTx;
+	this->handle.hdmatx								= nullptr;
 
 	this->handle.hdmarx->Parent						= &this->handle;
-	this->handle.hdmatx->Parent						= &this->handle;
+	this->handle.hdmatx->Parent						= nullptr;
 
 	this->handle.hdmarx->Instance					= this->cfg->dmaRx;
 	this->handle.hdmarx->Init.Channel				= this->cfg->dmaRxCh;
@@ -36,30 +36,25 @@ MicrosdSdio::MicrosdSdio ( const MicrosdSdioCfg* const cfg ) : cfg( cfg ) {
 	this->handle.hdmarx->Init.MemBurst				= DMA_MBURST_INC4;
 	this->handle.hdmarx->Init.PeriphBurst			= DMA_PBURST_INC4;
 
-	this->handle.hdmatx->Instance					= this->cfg->dmaTx;
-	this->handle.hdmatx->Init.Channel				= this->cfg->dmaTxCh;
-	this->handle.hdmatx->Init.Direction				= DMA_MEMORY_TO_PERIPH;
-	this->handle.hdmatx->Init.PeriphInc				= DMA_PINC_DISABLE;
-	this->handle.hdmatx->Init.MemInc				= DMA_MINC_ENABLE;
-	this->handle.hdmatx->Init.PeriphDataAlignment	= DMA_PDATAALIGN_WORD;
-	this->handle.hdmatx->Init.MemDataAlignment		= DMA_MDATAALIGN_WORD;
-	this->handle.hdmatx->Init.Mode					= DMA_PFCTRL;
-	this->handle.hdmatx->Init.Priority				= DMA_PRIORITY_LOW;
-	this->handle.hdmatx->Init.FIFOMode				= DMA_FIFOMODE_ENABLE;
-	this->handle.hdmatx->Init.FIFOThreshold			= DMA_FIFO_THRESHOLD_FULL;
-	this->handle.hdmatx->Init.MemBurst				= DMA_MBURST_INC4;
-	this->handle.hdmatx->Init.PeriphBurst			= DMA_PBURST_INC4;
-
 	this->m = USER_OS_STATIC_MUTEX_CREATE( &mb );
 	this->s = USER_OS_STATIC_BIN_SEMAPHORE_CREATE( &this->sb );
 }
 
-void MicrosdSdio::dmaRxHandler ( void ) {
-	HAL_DMA_IRQHandler( &this->dmaRx );
+EC_SD_RESULT MicrosdSdio::waitReadySd ( void ) {
+	uint32_t		timeout_flag = 1000;
+	while( timeout_flag ) {
+		if ( HAL_SD_GetCardState( &this->handle ) != HAL_SD_CARD_TRANSFER ) {
+			USER_OS_DELAY_MS(1);
+			timeout_flag--;
+		} else {
+			 return EC_SD_RESULT::OK;
+		}
+	}
+	return  EC_SD_RESULT::ERROR;
 }
 
-void MicrosdSdio::dmaTxHandler ( void ) {
-	HAL_DMA_IRQHandler( &this->dmaTx );
+void MicrosdSdio::dmaRxHandler ( void ) {
+	HAL_DMA_IRQHandler( &this->dmaRx );
 }
 
 EC_MICRO_SD_TYPE MicrosdSdio::initialize ( void ) {
@@ -68,17 +63,12 @@ EC_MICRO_SD_TYPE MicrosdSdio::initialize ( void ) {
 		__HAL_RCC_PWR_CLK_ENABLE();
 		__HAL_RCC_SDIO_CLK_ENABLE();
 
-		McHardwareInterfacesImplementation::dmaClkOn( this->cfg->dmaTx );
 		McHardwareInterfacesImplementation::dmaClkOn( this->cfg->dmaRx );
-
-		checkResult( HAL_DMA_DeInit( &this->dmaTx ) );
-		checkResult( HAL_DMA_Init( &this->dmaTx ) );
 
 		checkResult( HAL_DMA_DeInit( &this->dmaRx ) );
 		checkResult( HAL_DMA_Init( &this->dmaRx ) );
 
 		McHardwareInterfacesImplementation::dmaIrqOn( this->cfg->dmaRx, this->cfg->dmaRxIrqPrio );
-		McHardwareInterfacesImplementation::dmaIrqOn( this->cfg->dmaTx, this->cfg->dmaTxIrqPrio );
 
 		checkResult( HAL_SD_DeInit( &this->handle ) );
 		checkResult( HAL_SD_Init( &this->handle ) );
@@ -111,10 +101,14 @@ EC_SD_RESULT MicrosdSdio::readSector ( uint32_t sector, uint8_t *targetArray, ui
 
 	xSemaphoreTake ( this->s, 0 );
 
-	if ( HAL_SD_ReadBlocks_DMA( &this->handle, targetArray, sector, countSector ) == HAL_OK ) {
-		if ( xSemaphoreTake ( this->s, timeoutMs ) == pdTRUE ) {
-			rv = EC_SD_RESULT::OK;
-		};
+	if ( this->waitReadySd() == EC_SD_RESULT::OK ) {
+
+		if ( HAL_SD_ReadBlocks_DMA( &this->handle, targetArray, sector, countSector ) == HAL_OK ) {
+			if ( xSemaphoreTake ( this->s, timeoutMs ) == pdTRUE ) {
+				rv = EC_SD_RESULT::OK;
+			};
+		}
+
 	}
 
 	USER_OS_GIVE_MUTEX( this->m );
@@ -130,12 +124,15 @@ EC_SD_RESULT MicrosdSdio::writeSector ( const uint8_t* const sourceArray, uint32
 
 	USER_OS_TAKE_MUTEX( this->m, portMAX_DELAY );
 
-	xSemaphoreTake ( this->s, 0 );
+	if ( this->waitReadySd() == EC_SD_RESULT::OK ) {
 
-	if ( HAL_SD_WriteBlocks_DMA( &this->handle, (uint8_t*)sourceArray, sector, countSector ) == HAL_OK ) {
-		if ( xSemaphoreTake ( this->s, timeoutMs ) == pdTRUE ) {
+		HAL_StatusTypeDef		res;
+		res = HAL_SD_WriteBlocks( &this->handle, ( uint8_t* )sourceArray, sector, countSector, timeoutMs );
+
+		if ( res == HAL_OK ) {
 			rv = EC_SD_RESULT::OK;
-		};
+		}
+
 	}
 
 	USER_OS_GIVE_MUTEX( this->m );
