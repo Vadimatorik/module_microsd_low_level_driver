@@ -96,7 +96,7 @@ target_compile_options (${PROJECT_NAME} PRIVATE
                         "${${PROJECT_NAME}_COMPILER_FLAGS}${${PROJECT_NAME}_OPTIMIZATION_FLAGS}")
 
 # Показ флагов компиляции.
-add_custom_command (TARGET ${PROJECT_NAME} POST_BUILD
+add_custom_command (TARGET STATIC ${PROJECT_NAME} POST_BUILD
                     COMMENT
                     "${PROJECT_NAME} flags: ${${PROJECT_NAME}_COMPILER_FLAGS}${${PROJECT_NAME}_OPTIMIZATION_FLAGS}")
 
