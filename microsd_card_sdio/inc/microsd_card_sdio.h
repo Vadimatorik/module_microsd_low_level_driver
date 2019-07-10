@@ -4,7 +4,7 @@
 
 #ifdef MODULE_MICROSD_CARD_SDIO_ENABLED
 
-#include "mc_hardware_interfaces_pin.h"
+#include "mc_pin.h"
 #include "user_os.h"
 #include "microsd_base.h"
 
@@ -18,8 +18,8 @@
 
 #endif
 
-#include "mc_hardware_interfaces_implementation_for_stm32_dma.h"
-#include "mc_hardware_interfaces_implementation_for_stm32_rcc.h"
+#include "dma.h"
+#include "mc_clk.h"
 
 struct MicrosdSdioCfg {
     uint32_t wide;                /// SDIO_BUS_WIDE_1B, SDIO_BUS_WIDE_4B, SDIO_BUS_WIDE_8B.

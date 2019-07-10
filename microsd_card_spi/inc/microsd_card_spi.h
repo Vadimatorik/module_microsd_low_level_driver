@@ -2,8 +2,8 @@
 
 #ifdef MODULE_MICROSD_CARD_SPI_ENABLED
 
-#include "mc_hardware_interfaces_spi.h"
-#include "mc_hardware_interfaces_pin.h"
+#include "mc_spi.h"
+#include "mc_pin.h"
 #include "user_os.h"
 #include "microsd_base.h"
 

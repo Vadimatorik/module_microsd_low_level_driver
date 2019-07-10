@@ -63,12 +63,12 @@ EC_MICRO_SD_TYPE MicrosdSdio::initialize (void) {
         __HAL_RCC_PWR_CLK_ENABLE();
         __HAL_RCC_SDIO_CLK_ENABLE();
         
-        McHardwareInterfacesImplementation::dmaClkOn(this->cfg->dmaRx);
+        mc::dmaClkOn(this->cfg->dmaRx);
         
         checkResult(HAL_DMA_DeInit(&this->dmaRx));
         checkResult(HAL_DMA_Init(&this->dmaRx));
         
-        McHardwareInterfacesImplementation::dmaIrqOn(this->cfg->dmaRx, this->cfg->dmaRxIrqPrio);
+        mc::dmaIrqOn(this->cfg->dmaRx, this->cfg->dmaRxIrqPrio);
         
         checkResult(HAL_SD_DeInit(&this->handle));
         checkResult(HAL_SD_Init(&this->handle));
